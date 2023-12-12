@@ -58,6 +58,96 @@ MsckfVio::MsckfVio(ros::NodeHandle& pnh):
 }
 
 bool MsckfVio::loadParameters() {
+  // gt
+  ifstream ifs_gt;
+  nh.param<string>("gt_path", gt_path, "/home/ldd/euroc/V1_01_easy/mav0/state_groundtruth_estimate0/V1_01_easy.txt");
+  nh.param<string>("gt_type", gt_type, "euroc");
+
+  // gravity
+  if(gt_type == "simulation"){
+    IMUState::gravity = Vector3d(0, 0, -9.81);
+  }else{
+    IMUState::gravity = Vector3d(0, 0, -9.81);
+  }
+  
+  ifs_gt.open(gt_path, ios::in);  //读取文件
+  if(!ifs_gt.is_open())
+  {
+      cout << "gt ifstream open file error!\n";
+  }
+  string line_gt;
+  vector<string> lines_gt;
+  while(getline(ifs_gt, line_gt))    
+      lines_gt.push_back(line_gt);   
+  ifs_gt.close();
+  Gt gt_pose;
+  string s_gt;
+  vector<std::string> vec_gt;
+
+  // euroc 
+  if(gt_type == "euroc"){
+    s_gt = ",";
+    for(int i=1; i<lines_gt.size(); ++i){
+      vec_gt = split_vec(lines_gt[i],s_gt);
+      gt_pose.time = std::stold(vec_gt[0]) * 1e-9;
+      gt_pose.p << std::stod(vec_gt[1]), std::stod(vec_gt[2]), std::stod(vec_gt[3]);
+      gt_pose.q.x() = std::stod(vec_gt[5]);
+      gt_pose.q.y() = std::stod(vec_gt[6]);
+      gt_pose.q.z() = std::stod(vec_gt[7]);
+      gt_pose.q.w() = std::stod(vec_gt[4]);
+      gt_pose.vel = Eigen::Vector3d(std::stod(vec_gt[8]), std::stod(vec_gt[9]), std::stod(vec_gt[10]));
+      gt_poses.push_back(gt_pose);
+    }
+  }
+
+  if(gt_type == "euroc_gt"){
+    s_gt = " ";
+    for(int i=1; i<lines_gt.size(); ++i){
+      vec_gt = split_vec(lines_gt[i],s_gt);
+      gt_pose.time = std::stold(vec_gt[0]);
+      gt_pose.p << std::stod(vec_gt[1]), std::stod(vec_gt[2]), std::stod(vec_gt[3]);
+      gt_pose.q.x() = std::stod(vec_gt[5]);
+      gt_pose.q.y() = std::stod(vec_gt[6]);
+      gt_pose.q.z() = std::stod(vec_gt[7]);
+      gt_pose.q.w() = std::stod(vec_gt[4]);
+      gt_pose.vel = Eigen::Vector3d(std::stod(vec_gt[8]), std::stod(vec_gt[9]), std::stod(vec_gt[10]));
+      gt_poses.push_back(gt_pose);
+    }
+  }
+    
+
+    // euroc v1
+    if(gt_type == "eurocv1"){
+      s_gt = " ";
+      for(int i=1; i<lines_gt.size(); ++i){
+          vec_gt = split_vec(lines_gt[i],s_gt);
+          gt_pose.time = std::stold(vec_gt[0]);
+          gt_pose.p << std::stod(vec_gt[1]), std::stod(vec_gt[2]), std::stod(vec_gt[3]);
+          gt_pose.q.x() = std::stod(vec_gt[4]);
+          gt_pose.q.y() = std::stod(vec_gt[5]);
+          gt_pose.q.z() = std::stod(vec_gt[6]);
+          gt_pose.q.w() = std::stod(vec_gt[7]);
+          gt_poses.push_back(gt_pose);
+        }
+    }
+
+    // simulation dataset
+    if(gt_type == "simulation"){
+      s_gt = " ";
+      for(int i=1; i<lines_gt.size(); ++i){
+          vec_gt = split_vec(lines_gt[i],s_gt);
+          gt_pose.time = std::stold(vec_gt[0]);
+          gt_pose.p << std::stod(vec_gt[5]), std::stod(vec_gt[6]), std::stod(vec_gt[7]);
+
+          gt_pose.q.x() = std::stod(vec_gt[2]);
+          gt_pose.q.y() = std::stod(vec_gt[3]);
+          gt_pose.q.z() = std::stod(vec_gt[4]);
+          gt_pose.q.w() = std::stod(vec_gt[1]);
+          gt_pose.vel = Vector3d(std::stod(vec_gt[8]), std::stod(vec_gt[9]), std::stod(vec_gt[10]));
+          gt_poses.push_back(gt_pose);
+      }
+    }
+
   // Frame id
   nh.param<string>("fixed_frame_id", fixed_frame_id, "world");
   nh.param<string>("child_frame_id", child_frame_id, "robot");
@@ -193,6 +283,8 @@ bool MsckfVio::createRosIO() {
       &MsckfVio::mocapOdomCallback, this);
   mocap_odom_pub = nh.advertise<nav_msgs::Odometry>("gt_odom", 1);
 
+  esti_info_pub = nh.advertise<BiasEstiInfo>("bias_esti_info", 1);
+
   return true;
 }
 
@@ -233,53 +325,97 @@ void MsckfVio::imuCallback(
   // being processed immediately. The IMU msgs are processed
   // when the next image is available, in which way, we can
   // easily handle the transfer delay.
+  // imu_msg_buffer.push_back(*msg);
+
+  // if (!is_gravity_set) {
+  //   if (imu_msg_buffer.size() < 200) return;
+  //   //if (imu_msg_buffer.size() < 10) return;
+  //   initializeGravityAndBias();
+  //   is_gravity_set = true;
+  // }
+
   imu_msg_buffer.push_back(*msg);
 
   if (!is_gravity_set) {
-    if (imu_msg_buffer.size() < 200) return;
-    //if (imu_msg_buffer.size() < 10) return;
-    initializeGravityAndBias();
-    is_gravity_set = true;
+  // if (imu_measurement.size() < 200) return;
+    initializeGravityAndBias(msg);
   }
-
+  
+  // if(msg->header.stamp.toSec() >= gt_poses[gt_num].time && !is_gt_time){
+  //   is_gt_time = true;
+  //   ROS_INFO("gt_num: %d, big gt_time: %f", gt_num, gt_poses[gt_num].time);
+  //   ROS_INFO("msg_time: %f", msg->header.stamp.toSec());
+  // }
+  
   return;
 }
 
-void MsckfVio::initializeGravityAndBias() {
+void MsckfVio::initializeGravityAndBias(const sensor_msgs::ImuConstPtr& msg) {
 
-  // Initialize gravity and gyro bias.
-  Vector3d sum_angular_vel = Vector3d::Zero();
-  Vector3d sum_linear_acc = Vector3d::Zero();
+  // // Initialize gravity and gyro bias.
+  // Vector3d sum_angular_vel = Vector3d::Zero();
+  // Vector3d sum_linear_acc = Vector3d::Zero();
 
-  for (const auto& imu_msg : imu_msg_buffer) {
-    Vector3d angular_vel = Vector3d::Zero();
-    Vector3d linear_acc = Vector3d::Zero();
+  // for (const auto& imu_msg : imu_msg_buffer) {
+  //   Vector3d angular_vel = Vector3d::Zero();
+  //   Vector3d linear_acc = Vector3d::Zero();
 
-    tf::vectorMsgToEigen(imu_msg.angular_velocity, angular_vel);
-    tf::vectorMsgToEigen(imu_msg.linear_acceleration, linear_acc);
+  //   tf::vectorMsgToEigen(imu_msg.angular_velocity, angular_vel);
+  //   tf::vectorMsgToEigen(imu_msg.linear_acceleration, linear_acc);
 
-    sum_angular_vel += angular_vel;
-    sum_linear_acc += linear_acc;
+  //   sum_angular_vel += angular_vel;
+  //   sum_linear_acc += linear_acc;
+  // }
+
+  // state_server.imu_state.gyro_bias =
+  //   sum_angular_vel / imu_msg_buffer.size();
+  // //IMUState::gravity =
+  // //  -sum_linear_acc / imu_msg_buffer.size();
+  // // This is the gravity in the IMU frame.
+  // Vector3d gravity_imu =
+  //   sum_linear_acc / imu_msg_buffer.size();
+
+  // // Initialize the initial orientation, so that the estimation
+  // // is consistent with the inertial frame.
+  // double gravity_norm = gravity_imu.norm();
+  // IMUState::gravity = Vector3d(0.0, 0.0, -gravity_norm);
+
+  // Quaterniond q0_i_w = Quaterniond::FromTwoVectors(
+  //   gravity_imu, -IMUState::gravity);
+  // state_server.imu_state.orientation =
+  //   rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
+
+  // return;
+
+  double time = msg->header.stamp.toSec();
+  if(gt_poses[gt_num].time > msg->header.stamp.toSec()){
+    ROS_INFO("big gt_time: %f", gt_poses[gt_num].time);
+    ROS_INFO("msg_time: %f", time);
+    return;
+  }
+    
+  while(gt_poses[gt_num].time < msg->header.stamp.toSec()){
+    // cout << "gt_num: " << gt_num << " time: " << msg->header.stamp.toSec() 
+    // << " gt_time: " << gt_poses[gt_num].time <<endl;
+    gt_num ++;
   }
 
-  state_server.imu_state.gyro_bias =
-    sum_angular_vel / imu_msg_buffer.size();
-  //IMUState::gravity =
-  //  -sum_linear_acc / imu_msg_buffer.size();
-  // This is the gravity in the IMU frame.
-  Vector3d gravity_imu =
-    sum_linear_acc / imu_msg_buffer.size();
+  if(gt_num != 0)
+    gt_num --;
 
-  // Initialize the initial orientation, so that the estimation
-  // is consistent with the inertial frame.
-  double gravity_norm = gravity_imu.norm();
-  IMUState::gravity = Vector3d(0.0, 0.0, -gravity_norm);
+  std::cout << "gt_num: " << gt_num << " gt_time: " << gt_poses[gt_num].time << " imu_time: " << time << " dtime: " << gt_poses[gt_num].time-time 
+  << " position: " << gt_poses[gt_num].p.transpose() << " velocity: " << gt_poses[gt_num].vel.transpose()<< std::endl;
 
-  Quaterniond q0_i_w = Quaterniond::FromTwoVectors(
-    gravity_imu, -IMUState::gravity);
+  gt_init = gt_num; 
+  
+  state_server.imu_state.time = gt_poses[gt_init].time;
+  cout << "gt_init: " << gt_init << endl;
+  cout << gt_poses[gt_init].p.transpose() << endl;
   state_server.imu_state.orientation =
-    rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
-
+    rotationToQuaternion(gt_poses[gt_init].q.toRotationMatrix().cast<double>().transpose()); //T_w_imu
+  state_server.imu_state.position = gt_poses[gt_init].p.cast<double>(); //p_imu_w
+  state_server.imu_state.velocity = gt_poses[gt_init].vel.cast<double>();
+  is_gravity_set = true;
   return;
 }
 
@@ -1440,6 +1576,44 @@ void MsckfVio::publish(const ros::Time& time) {
   feature_msg_ptr->width = feature_msg_ptr->points.size();
 
   feature_pub.publish(feature_msg_ptr);
+
+  // gt publish
+  Isometry3d gt = Isometry3d::Identity();
+  while(gt_num < gt_poses.size()){
+    if (gt_poses[gt_num].time <= state_server.imu_state.time){
+        gt_num ++;
+    }else{
+        
+        break;
+    }
+  }
+  gt.translation() = gt_poses[gt_num].p;
+  gt.linear() = gt_poses[gt_num].q.toRotationMatrix();
+
+  // cout << "gt time: " << gt_poses[gt_num].time << "imu time: "<< state_server.imu_state.time << "current gt num: " << gt_num << endl;
+
+  nav_msgs::Odometry odom_gt;
+  odom_gt.header.stamp = time;
+  odom_gt.header.frame_id = fixed_frame_id;
+  odom_gt.child_frame_id = child_frame_id;
+
+  tf::poseEigenToMsg(gt, odom_gt.pose.pose);
+  mocap_odom_pub.publish(odom_gt);
+
+  BiasEstiInfo bias_info;
+  bias_info.header.stamp = time;
+  bias_info.header.frame_id = fixed_frame_id;
+
+  bias_info.bias_acc_x = imu_state.acc_bias(0);
+  bias_info.bias_acc_y = imu_state.acc_bias(1);
+  bias_info.bias_acc_z = imu_state.acc_bias(2);
+
+  bias_info.bias_gyro_x = imu_state.gyro_bias(0);
+  bias_info.bias_gyro_y = imu_state.gyro_bias(1);
+  bias_info.bias_gyro_z = imu_state.gyro_bias(2);
+
+  esti_info_pub.publish(bias_info);
+
 
   return;
 }

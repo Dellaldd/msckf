@@ -55,6 +55,9 @@
       <remap from="~imu" to="/imu0"/>
       <remap from="~features" to="image_processor/features"/>
 
+      <param name="gt_path" value="/home/ldd/euroc/V1_02_medium/mav0/state_groundtruth_estimate0/gt.txt"/>
+      <param name="gt_type" value="euroc"/>
+
     </node>
   </group>
 

@@ -10,7 +10,8 @@
 
 #include <cmath>
 #include <Eigen/Dense>
-
+#include "boost/regex.hpp"
+#include<vector>
 namespace msckf_vio {
 
 /*
@@ -20,6 +21,21 @@ namespace msckf_vio {
  *          [ w3   0 -w1]
  *          [-w2  w1   0]
  */
+
+inline std::vector<std::string> split_vec(std::string str,std::string s)
+{
+    boost::regex reg(s.c_str());
+    
+    std::vector<std::string> vec;
+    boost::sregex_token_iterator it(str.begin(),str.end(),reg,-1);
+    boost::sregex_token_iterator end;
+    while(it!=end)
+    {
+        vec.push_back(*it++);
+    }
+    return vec;
+}
+
 inline Eigen::Matrix3d skewSymmetric(const Eigen::Vector3d& w) {
   Eigen::Matrix3d w_hat;
   w_hat(0, 0) = 0;

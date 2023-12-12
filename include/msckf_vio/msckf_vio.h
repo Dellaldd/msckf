@@ -26,7 +26,7 @@
 #include "cam_state.h"
 #include "feature.hpp"
 #include <msckf_vio/CameraMeasurement.h>
-
+#include <msckf_vio/BiasEstiInfo.h>
 namespace msckf_vio {
 /*
  * @brief MsckfVio Implements the algorithm in
@@ -114,7 +114,7 @@ class MsckfVio {
      *    Initialize the IMU bias and initial orientation
      *    based on the first few IMU readings.
      */
-    void initializeGravityAndBias();
+    void initializeGravityAndBias(const sensor_msgs::ImuConstPtr& msg);
 
     /*
      * @biref resetCallback
@@ -180,7 +180,7 @@ class MsckfVio {
     std::vector<sensor_msgs::Imu> imu_msg_buffer;
 
     // Indicate if the gravity vector is set.
-    bool is_gravity_set;
+    bool is_gravity_set = false, is_gt_time = false;
 
     // Indicate if the received image is the first one. The
     // system will start after receiving the first image.
@@ -209,6 +209,7 @@ class MsckfVio {
     ros::Subscriber feature_sub;
     ros::Publisher odom_pub;
     ros::Publisher feature_pub;
+    ros::Publisher esti_info_pub;
     tf::TransformBroadcaster tf_pub;
     ros::ServiceServer reset_srv;
 
@@ -232,6 +233,11 @@ class MsckfVio {
     ros::Publisher mocap_odom_pub;
     geometry_msgs::TransformStamped raw_mocap_odom_msg;
     Eigen::Isometry3d mocap_initial_frame;
+
+    std::string gt_path, gt_type;
+
+    std::vector<Gt> gt_poses;
+    int gt_num = 0, gt_init = 0;
 };
 
 typedef MsckfVio::Ptr MsckfVioPtr;

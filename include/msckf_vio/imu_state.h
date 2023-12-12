@@ -20,6 +20,14 @@ namespace msckf_vio {
 /*
  * @brief IMUState State for IMU
  */
+
+
+struct Gt{
+  long double time;
+  Eigen::Quaterniond q;
+  Eigen::Vector3d p,vel; 
+};
+
 struct IMUState {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   typedef long long int StateIDType;

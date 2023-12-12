@@ -4,6 +4,7 @@ project(msckf_vio CXX)
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
+set(CMAKE_BUILD_TYPE Release)
 
 add_compile_options(-std=c++14)
 
@@ -41,7 +42,7 @@ find_package(SuiteSparse REQUIRED)
 ##################
 add_message_files(
   FILES
-
+  BiasEstiInfo.msg
   FeatureMeasurement.msg
   CameraMeasurement.msg
   TrackingInfo.msg
