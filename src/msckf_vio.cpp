@@ -27,6 +27,7 @@
 #include <msckf_vio/math_utils.hpp>
 #include <msckf_vio/utils.h>
 
+
 using namespace std;
 using namespace Eigen;
 
@@ -320,7 +321,7 @@ bool MsckfVio::initialize() {
 
 void MsckfVio::imuCallback(
     const sensor_msgs::ImuConstPtr& msg) {
-
+  // ROS_INFO("receive imu!");
   // IMU msgs are pushed backed into a buffer instead of
   // being processed immediately. The IMU msgs are processed
   // when the next image is available, in which way, we can

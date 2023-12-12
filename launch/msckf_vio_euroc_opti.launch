@@ -6,7 +6,7 @@
     default="$(find msckf_vio)/config/camchain-imucam-euroc.yaml"/>
 
   <!-- Image Processor Nodelet  -->
-  <include file="$(find msckf_vio)/launch/image_processor_euroc.launch">
+  <include file="$(find msckf_vio)/launch/image_processor_euroc_opti.launch">
     <arg name="robot" value="$(arg robot)"/>
     <arg name="calibration_file" value="$(arg calibration_file)"/>
   </include>
@@ -52,11 +52,11 @@
       <param name="initial_covariance/extrinsic_rotation_cov" value="3.0462e-4"/>
       <param name="initial_covariance/extrinsic_translation_cov" value="2.5e-5"/>
 
-      <remap from="~imu" to="/imu0"/>
-      <remap from="~features" to="image_processor/features"/>
+      <remap from="~imu" to="/imu"/>
+      <remap from="~features" to="/firefly_sbx/image_processor/features"/>
 
-      <param name="gt_path" value="/home/ldd/bias_esti_ws/src/bias_esti/datasets/euroc_gt/v101/gt.txt"/>
-      <param name="gt_type" value="eurocv1"/>
+      <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v102/gt.txt"/>
+      <param name="gt_type" value="euroc"/>
 
     </node>
   </group>

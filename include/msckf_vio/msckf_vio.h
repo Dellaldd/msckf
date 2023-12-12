@@ -27,6 +27,8 @@
 #include "feature.hpp"
 #include <msckf_vio/CameraMeasurement.h>
 #include <msckf_vio/BiasEstiInfo.h>
+#include <msckf_vio/OptiFlow.h>
+
 namespace msckf_vio {
 /*
  * @brief MsckfVio Implements the algorithm in
