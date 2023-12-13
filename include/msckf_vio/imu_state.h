@@ -45,6 +45,7 @@ struct IMUState {
   // Take a vector from the world frame to
   // the IMU (body) frame.
   Eigen::Vector4d orientation;
+  Eigen::Quaterniond imu_orientation;
 
   // Position of the IMU (body) frame
   // in the world frame.
@@ -93,6 +94,7 @@ struct IMUState {
 
   IMUState(): id(0), time(0),
     orientation(Eigen::Vector4d(0, 0, 0, 1)),
+    imu_orientation(Eigen::Quaterniond(Eigen::Vector4d(0, 0, 0, 1))),
     position(Eigen::Vector3d::Zero()),
     velocity(Eigen::Vector3d::Zero()),
     gyro_bias(Eigen::Vector3d::Zero()),

@@ -41,8 +41,9 @@ def main():
     error_pos = []
     
     end = min(esti.shape[0], gt.shape[0])
+    # end = 194
     start = 0
-    for i in range(gt.shape[0]):
+    for i in range(end):
         q = [esti[i,4], esti[i,5], esti[i,6], esti[i,7]]
         # euler = R.from_quat(q).as_euler("xyz", degrees=True)
         euler = list(euler_from_quaternion(q))

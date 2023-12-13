@@ -187,6 +187,7 @@ class MsckfVio {
     
     std::vector<std::pair<double, Eigen::Vector3d>> speed_msg_buffer;
 
+    std::vector<IMUState> window;
     // Indicate if the gravity vector is set.
     bool is_gravity_set = false, is_gt_time = false;
 
