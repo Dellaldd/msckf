@@ -5,6 +5,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 set(CMAKE_BUILD_TYPE Release)
+# set(CMAKE_BUILD_TYPE Debug)
 
 add_compile_options(-std=c++14)
 
@@ -36,6 +37,7 @@ find_package(Boost REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(SuiteSparse REQUIRED)
+find_package(Ceres REQUIRED)
 
 ##################
 ## ROS messages ##
@@ -79,6 +81,7 @@ include_directories(
   ${Boost_INCLUDE_DIR}
   ${OpenCV_INCLUDE_DIRS}
   ${SUITESPARSE_INCLUDE_DIRS}
+  ${CERES_INCLUDE_DIRS}
 )
 
 # Msckf Vio
@@ -93,6 +96,7 @@ add_dependencies(msckf_vio
 target_link_libraries(msckf_vio
   ${catkin_LIBRARIES}
   ${SUITESPARSE_LIBRARIES}
+  ${CERES_LIBRARIES}
 )
 
 # Msckf Vio nodelet
@@ -106,6 +110,7 @@ add_dependencies(msckf_vio_nodelet
 target_link_libraries(msckf_vio_nodelet
   msckf_vio
   ${catkin_LIBRARIES}
+  ${CERES_LIBRARIES}
 )
 
 # Image processor

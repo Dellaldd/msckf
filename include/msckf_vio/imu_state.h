@@ -52,7 +52,7 @@ struct IMUState {
 
   // Velocity of the IMU (body) frame
   // in the world frame.
-  Eigen::Vector3d velocity;
+  Eigen::Vector3d velocity, opti_speed;
 
   // Bias for measured angular velocity
   // and acceleration.
@@ -72,6 +72,8 @@ struct IMUState {
   Eigen::Vector4d orientation_null;
   Eigen::Vector3d position_null;
   Eigen::Vector3d velocity_null;
+
+  std::vector<std::pair<double, Eigen::Vector3d>> m_acc_set, m_gyro_set;
 
   // Process noise
   static double gyro_noise;

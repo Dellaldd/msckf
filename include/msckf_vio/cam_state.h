@@ -31,9 +31,11 @@ struct CAMState {
   // Orientation
   // Take a vector from the world frame to the camera frame.
   Eigen::Vector4d orientation;
-
+  Eigen::Quaterniond imu_orientation;
   // Position of the camera frame in the world frame.
-  Eigen::Vector3d position;
+  Eigen::Vector3d position, opti_speed;
+  
+  std::vector<std::pair<double, Eigen::Vector3d>> m_acc_set, m_gyro_set;
 
   // These two variables should have the same physical
   // interpretation with `orientation` and `position`.
@@ -48,15 +50,19 @@ struct CAMState {
 
   CAMState(): id(0), time(0),
     orientation(Eigen::Vector4d(0, 0, 0, 1)),
+    imu_orientation(Eigen::Vector4d(0, 0, 0, 1)),
     position(Eigen::Vector3d::Zero()),
     orientation_null(Eigen::Vector4d(0, 0, 0, 1)),
-    position_null(Eigen::Vector3d(0, 0, 0)) {}
+    position_null(Eigen::Vector3d(0, 0, 0)),
+    opti_speed(Eigen::Vector3d(0, 0, 0)) {}
 
   CAMState(const StateIDType& new_id ): id(new_id), time(0),
     orientation(Eigen::Vector4d(0, 0, 0, 1)),
+    imu_orientation(Eigen::Vector4d(0, 0, 0, 1)),
     position(Eigen::Vector3d::Zero()),
     orientation_null(Eigen::Vector4d(0, 0, 0, 1)),
-    position_null(Eigen::Vector3d::Zero()) {}
+    position_null(Eigen::Vector3d::Zero()),
+    opti_speed(Eigen::Vector3d(0, 0, 0)) {}
 };
 
 typedef std::map<StateIDType, CAMState, std::less<int>,

@@ -18,6 +18,7 @@
 
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
+#include <geometry_msgs/Vector3Stamped.h>
 #include <nav_msgs/Odometry.h>
 #include <tf/transform_broadcaster.h>
 #include <std_srvs/Trigger.h>
@@ -97,7 +98,8 @@ class MsckfVio {
      * @param msg IMU msg.
      */
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
-
+    
+    void optiflowCallback(const geometry_msgs::Vector3StampedConstPtr& msg);
     /*
      * @brief featureCallback
      *    Callback function for feature measurements.
@@ -127,6 +129,8 @@ class MsckfVio {
      */
     bool resetCallback(std_srvs::Trigger::Request& req,
         std_srvs::Trigger::Response& res);
+
+    void estiImuBias(const double time);
 
     // Filter related functions
     // Propogate the state
@@ -160,7 +164,7 @@ class MsckfVio {
         const Eigen::VectorXd&r, const int& dof);
     void removeLostFeatures();
     void findRedundantCamStates(
-        std::vector<StateIDType>& rm_cam_state_ids);
+        std::vector<StateIDType>& rm_cam_state_ids, bool& remove_first);
     void pruneCamStateBuffer();
     // Reset the system online if the uncertainty is too large.
     void onlineReset();
@@ -180,6 +184,8 @@ class MsckfVio {
     // This is buffer is used to handle the unsynchronization or
     // transfer delay between IMU and Image messages.
     std::vector<sensor_msgs::Imu> imu_msg_buffer;
+    
+    std::vector<std::pair<double, Eigen::Vector3d>> speed_msg_buffer;
 
     // Indicate if the gravity vector is set.
     bool is_gravity_set = false, is_gt_time = false;
@@ -209,6 +215,8 @@ class MsckfVio {
     // Subscribers and publishers
     ros::Subscriber imu_sub;
     ros::Subscriber feature_sub;
+    ros::Subscriber optiflow_sub;
+    
     ros::Publisher odom_pub;
     ros::Publisher feature_pub;
     ros::Publisher esti_info_pub;

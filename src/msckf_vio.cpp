@@ -20,12 +20,16 @@
 #include <eigen_conversions/eigen_msg.h>
 #include <tf_conversions/tf_eigen.h>
 #include <sensor_msgs/PointCloud2.h>
+
+
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
 
 #include <msckf_vio/msckf_vio.h>
 #include <msckf_vio/math_utils.hpp>
 #include <msckf_vio/utils.h>
+#include <ceres/ceres.h>
+#include <msckf_vio/BiasError.h>
 
 
 using namespace std;
@@ -74,7 +78,7 @@ bool MsckfVio::loadParameters() {
   ifs_gt.open(gt_path, ios::in);  //读取文件
   if(!ifs_gt.is_open())
   {
-      cout << "gt ifstream open file error!\n";
+      std::cout << "gt ifstream open file error!\n";
   }
   string line_gt;
   vector<string> lines_gt;
@@ -259,8 +263,8 @@ bool MsckfVio::loadParameters() {
   ROS_INFO("initial extrinsic translation cov: %f",
       extrinsic_translation_cov);
 
-  cout << T_imu_cam0.linear() << endl;
-  cout << T_imu_cam0.translation().transpose() << endl;
+  std::cout << T_imu_cam0.linear() << std::endl;
+  std::cout << T_imu_cam0.translation().transpose() << std::endl;
 
   ROS_INFO("max camera state #: %d", max_cam_state_size);
   ROS_INFO("===========================================");
@@ -277,6 +281,10 @@ bool MsckfVio::createRosIO() {
 
   imu_sub = nh.subscribe("imu", 100,
       &MsckfVio::imuCallback, this);
+
+  optiflow_sub = nh.subscribe("optiflow", 100,
+      &MsckfVio::optiflowCallback, this);
+
   feature_sub = nh.subscribe("features", 40,
       &MsckfVio::featureCallback, this);
 
@@ -319,6 +327,12 @@ bool MsckfVio::initialize() {
   return true;
 }
 
+void MsckfVio::optiflowCallback(const geometry_msgs::Vector3StampedConstPtr &msg){
+  Eigen::Vector3d speed = Eigen::Vector3d(msg->vector.x, msg->vector.y, msg->vector.z);
+  double time = msg->header.stamp.toSec();
+  speed_msg_buffer.push_back(make_pair(time, speed));
+}
+
 void MsckfVio::imuCallback(
     const sensor_msgs::ImuConstPtr& msg) {
   // ROS_INFO("receive imu!");
@@ -342,11 +356,11 @@ void MsckfVio::imuCallback(
     initializeGravityAndBias(msg);
   }
   
-  // if(msg->header.stamp.toSec() >= gt_poses[gt_num].time && !is_gt_time){
-  //   is_gt_time = true;
-  //   ROS_INFO("gt_num: %d, big gt_time: %f", gt_num, gt_poses[gt_num].time);
-  //   ROS_INFO("msg_time: %f", msg->header.stamp.toSec());
-  // }
+  if(msg->header.stamp.toSec() >= gt_poses[gt_num].time && !is_gt_time){
+    is_gt_time = true;
+    ROS_INFO("gt_num: %d, big gt_time: %f", gt_num, gt_poses[gt_num].time);
+    ROS_INFO("msg_time: %f", msg->header.stamp.toSec());
+  }
   
   return;
 }
@@ -410,8 +424,8 @@ void MsckfVio::initializeGravityAndBias(const sensor_msgs::ImuConstPtr& msg) {
   gt_init = gt_num; 
   
   state_server.imu_state.time = gt_poses[gt_init].time;
-  cout << "gt_init: " << gt_init << endl;
-  cout << gt_poses[gt_init].p.transpose() << endl;
+  std::cout << "gt_init: " << gt_init << std::endl;
+  std::cout << gt_poses[gt_init].p.transpose() << std::endl;
   state_server.imu_state.orientation =
     rotationToQuaternion(gt_poses[gt_init].q.toRotationMatrix().cast<double>().transpose()); //T_w_imu
   state_server.imu_state.position = gt_poses[gt_init].p.cast<double>(); //p_imu_w
@@ -498,7 +512,7 @@ void MsckfVio::featureCallback(
     const CameraMeasurementConstPtr& msg) {
 
   // Return if the gravity vector has not been set.
-  if (!is_gravity_set) return;
+  if (!is_gt_time) return;
 
   // Start the system if the first image is received.
   // The frame where the first image is received will be
@@ -512,18 +526,23 @@ void MsckfVio::featureCallback(
   static int critical_time_cntr = 0;
   double processing_start_time = ros::Time::now().toSec();
 
+  estiImuBias(msg->header.stamp.toSec());
+  ROS_INFO("finish estiImuBias! ");
+
   // Propogate the IMU state.
   // that are received before the image msg.
   ros::Time start_time = ros::Time::now();
   batchImuProcessing(msg->header.stamp.toSec());
   double imu_processing_time = (
       ros::Time::now()-start_time).toSec();
+  ROS_INFO("finish batchImuProcessing! ");
 
   // Augment the state vector.
   start_time = ros::Time::now();
   stateAugmentation(msg->header.stamp.toSec());
   double state_augmentation_time = (
       ros::Time::now()-start_time).toSec();
+  ROS_INFO("finish stateAugmentation! ");
 
   // Add new observations for existing features or new
   // features in the map server.
@@ -531,17 +550,20 @@ void MsckfVio::featureCallback(
   addFeatureObservations(msg);
   double add_observations_time = (
       ros::Time::now()-start_time).toSec();
+  ROS_INFO("finish addFeatureObservations! ");
 
   // Perform measurement update if necessary.
   start_time = ros::Time::now();
   removeLostFeatures();
   double remove_lost_features_time = (
       ros::Time::now()-start_time).toSec();
+  ROS_INFO("finish removeLostFeatures! ");
 
   start_time = ros::Time::now();
   pruneCamStateBuffer();
   double prune_cam_states_time = (
       ros::Time::now()-start_time).toSec();
+  ROS_INFO("finish pruneCamStateBuffer! ");
 
   // Publish the odometry.
   start_time = ros::Time::now();
@@ -573,6 +595,131 @@ void MsckfVio::featureCallback(
     //    publish_time, publish_time/processing_time);
   }
 
+  return;
+}
+
+void MsckfVio::estiImuBias(const double time){
+  IMUState& imu_state = state_server.imu_state;
+  int used_msg = 0;
+  double time_bound = imu_state.time;
+  int id = 0;
+
+  for(; id < speed_msg_buffer.size(); id++){
+    double msg_time = speed_msg_buffer[id].first;
+
+    if (msg_time < time_bound) {
+      ++used_msg;
+      continue;
+    }
+
+    if (msg_time > time) {
+      break;
+    }  
+    ++used_msg;
+  }
+
+  if(id > 0){
+    Eigen::Vector3d prev_speed = speed_msg_buffer[id-1].second;
+    double prev_time = speed_msg_buffer[id-1].first;
+
+    Eigen::Vector3d curr_speed = speed_msg_buffer[id].second;
+    double curr_time = speed_msg_buffer[id].first;
+    imu_state.opti_speed = prev_speed + (curr_speed - prev_speed) / (curr_time - prev_time) * (time - prev_time);
+  }else
+    imu_state.opti_speed = speed_msg_buffer[id].second;
+  
+  
+  speed_msg_buffer.erase(speed_msg_buffer.begin(),
+      speed_msg_buffer.begin()+used_msg);
+
+  imu_state.m_acc_set.clear();
+  imu_state.m_gyro_set.clear();
+
+  for (const auto& imu_msg : imu_msg_buffer) {
+    double imu_time = imu_msg.header.stamp.toSec();
+
+    if (imu_time < time_bound) {
+      continue;
+    }
+    if (imu_time > time) break;
+
+    // Convert the msgs.
+    Vector3d m_gyro, m_acc;
+    tf::vectorMsgToEigen(imu_msg.linear_acceleration, m_acc);
+    tf::vectorMsgToEigen(imu_msg.angular_velocity, m_gyro);
+
+    imu_state.m_acc_set.push_back(make_pair(imu_time, m_acc));
+    imu_state.m_gyro_set.push_back(make_pair(imu_time, m_gyro));
+    // Execute process model.
+  }
+
+  ROS_INFO("CAM STATE SIZE: %d, OPTI FLOW: %f, %f, %f, SIZE: %d", state_server.cam_states.size(),
+    imu_state.opti_speed[0], imu_state.opti_speed[1], imu_state.opti_speed[2], speed_msg_buffer.size());
+  if(state_server.cam_states.size() < 5)
+    return;
+
+  ceres::Problem problem;
+  double bias_a[3] = {imu_state.acc_bias[0], imu_state.acc_bias[1], imu_state.acc_bias[2]};
+  // double bias_a[3] = {-0.013337, 0.103464, 0.093086};
+
+  double bias_w[3] = {imu_state.gyro_bias[0], imu_state.gyro_bias[1], imu_state.gyro_bias[2]};
+  // double bias_w[3] = {-0.002153, 0.020744, 0.075806};
+
+  CamStateServer& cam_states = state_server.cam_states;
+  ceres::LossFunction *loss_function = new ceres::HuberLoss(0.5);  
+
+  CamStateServer::iterator cam, next;
+
+  for(cam = cam_states.begin(); cam != cam_states.end(); cam++){
+    
+    double prev_time = cam->second.time;
+    Eigen::Vector3d prev_acc = cam->second.m_acc_set.back().second;
+    Eigen::Vector3d prev_gyro = cam->second.m_gyro_set.back().second;
+    Eigen::Quaterniond orien = cam->second.imu_orientation;
+    orien.normalize();
+
+    next = cam;
+    next ++;
+
+    if(next == cam_states.end()){
+      Eigen::Vector3d speed_i = cam->second.opti_speed;
+      cout << "speed: " << speed_i.transpose() << endl;
+      Eigen::Vector3d speed_j = imu_state.opti_speed;
+      std::vector<std::pair<double, Eigen::Vector3d>> acc_set = cam->second.m_acc_set;
+      std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = cam->second.m_gyro_set;
+
+      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 3, 3, 3>(
+        new BiasError(prev_time, prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
+           
+      problem.AddResidualBlock(cost_function, NULL, bias_a, bias_w);  
+    }else{      
+      Eigen::Vector3d speed_i = cam->second.opti_speed;
+      Eigen::Vector3d speed_j = next->second.opti_speed;
+      std::vector<std::pair<double, Eigen::Vector3d>> acc_set = cam->second.m_acc_set;
+      std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = next->second.m_gyro_set;
+
+      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 3, 3, 3>(
+        new BiasError(prev_time, prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
+      problem.AddResidualBlock(cost_function, NULL, bias_a, bias_w);
+    }
+  }
+
+  std::cout << "finish add residual block! " << std::endl;
+  ceres::Solver::Options options;
+  options.minimizer_progress_to_stdout = true;
+  options.linear_solver_type = ceres::DENSE_SCHUR;
+  // options.trust_region_strategy_type = ceres::DOGLEG;
+  ceres::Solver::Summary summary;
+  ceres::Solve(options, &problem, &summary);
+  imu_state.acc_bias[0] = bias_a[0];
+  imu_state.acc_bias[1] = bias_a[1];
+  imu_state.acc_bias[2] = bias_a[2];
+  
+  imu_state.gyro_bias[0] = bias_w[0];
+  imu_state.gyro_bias[1] = bias_w[1];
+  imu_state.gyro_bias[2] = bias_w[2];
+  ROS_INFO("bias_a: %f, %f, %f, bias_w: %f, %f, %f", bias_a[0], bias_a[1], bias_a[2], 
+    bias_w[0], bias_w[1], bias_w[2]);
   return;
 }
 
@@ -645,6 +792,7 @@ void MsckfVio::mocapOdomCallback(
 void MsckfVio::batchImuProcessing(const double& time_bound) {
   // Counter how many IMU msgs in the buffer are used.
   int used_imu_msg_cntr = 0;
+  
 
   for (const auto& imu_msg : imu_msg_buffer) {
     double imu_time = imu_msg.header.stamp.toSec();
@@ -658,7 +806,7 @@ void MsckfVio::batchImuProcessing(const double& time_bound) {
     Vector3d m_gyro, m_acc;
     tf::vectorMsgToEigen(imu_msg.angular_velocity, m_gyro);
     tf::vectorMsgToEigen(imu_msg.linear_acceleration, m_acc);
-
+    
     // Execute process model.
     processModel(imu_time, m_gyro, m_acc);
     ++used_imu_msg_cntr;
@@ -849,6 +997,13 @@ void MsckfVio::stateAugmentation(const double& time) {
   cam_state.time = time;
   cam_state.orientation = rotationToQuaternion(R_w_c);
   cam_state.position = t_c_w;
+
+
+  cam_state.m_acc_set = state_server.imu_state.m_acc_set;
+  cam_state.m_gyro_set = state_server.imu_state.m_gyro_set;
+  cam_state.opti_speed = state_server.imu_state.opti_speed;
+  
+
 
   cam_state.orientation_null = cam_state.orientation;
   cam_state.position_null = cam_state.position;
@@ -1269,18 +1424,18 @@ void MsckfVio::removeLostFeatures() {
 }
 
 void MsckfVio::findRedundantCamStates(
-    vector<StateIDType>& rm_cam_state_ids) {
+    vector<StateIDType>& rm_cam_state_ids, bool& remove_first) {
 
   // Move the iterator to the key position.
   auto key_cam_state_iter = state_server.cam_states.end();
   for (int i = 0; i < 4; ++i)
-    --key_cam_state_iter;
+    --key_cam_state_iter; // 倒数第四帧
   auto cam_state_iter = key_cam_state_iter;
-  ++cam_state_iter;
-  auto first_cam_state_iter = state_server.cam_states.begin();
+  ++cam_state_iter; // 倒数第三帧
+  auto first_cam_state_iter = state_server.cam_states.begin();// 第一帧
 
   // Pose of the key camera state.
-  const Vector3d key_position =
+  const Vector3d key_position = // 倒数第四帧
     key_cam_state_iter->second.position;
   const Matrix3d key_rotation = quaternionToRotation(
       key_cam_state_iter->second.orientation);
@@ -1289,7 +1444,7 @@ void MsckfVio::findRedundantCamStates(
   // motion between states.
   for (int i = 0; i < 2; ++i) {
     const Vector3d position =
-      cam_state_iter->second.position;
+      cam_state_iter->second.position; // 倒数第三帧
     const Matrix3d rotation = quaternionToRotation(
         cam_state_iter->second.orientation);
 
@@ -1302,9 +1457,13 @@ void MsckfVio::findRedundantCamStates(
         tracking_rate > tracking_rate_threshold) {
       rm_cam_state_ids.push_back(cam_state_iter->first);
       ++cam_state_iter;
+      ROS_INFO("remove last frame!");
+      remove_first = false;
     } else {
       rm_cam_state_ids.push_back(first_cam_state_iter->first);
       ++first_cam_state_iter;
+      ROS_INFO("remove first frame!");
+      remove_first = true;
     }
   }
 
@@ -1321,7 +1480,8 @@ void MsckfVio::pruneCamStateBuffer() {
 
   // Find two camera states to be removed.
   vector<StateIDType> rm_cam_state_ids(0);
-  findRedundantCamStates(rm_cam_state_ids);
+  bool remove_first = true;
+  findRedundantCamStates(rm_cam_state_ids, remove_first);
 
   // Find the size of the Jacobian matrix.
   int jacobian_row_size = 0;
@@ -1432,12 +1592,33 @@ void MsckfVio::pruneCamStateBuffer() {
     } else {
       state_server.state_cov.conservativeResize(
           state_server.state_cov.rows()-6, state_server.state_cov.cols()-6);
-    }
-
-    // Remove this camera state in the state vector.
-    state_server.cam_states.erase(cam_id);
+    }  
   }
 
+  std::vector<std::pair<double, Eigen::Vector3d>> acc_set;
+  std::vector<std::pair<double, Eigen::Vector3d>> gyro_set;
+  CAMState &curr_camstate = state_server.cam_states[state_server.imu_state.id];
+
+  if(!remove_first){
+    ROS_INFO("before ACC: %d, GYRO: %d",curr_camstate.m_acc_set.size(), curr_camstate.m_gyro_set.size());
+
+    for (const auto& cam_id : rm_cam_state_ids) {
+      CAMState camstate = state_server.cam_states[cam_id];
+      ROS_INFO("in ACC: %d, GYRO: %d", camstate.m_acc_set.size(), camstate.m_gyro_set.size());
+      curr_camstate.m_acc_set.insert(curr_camstate.m_acc_set.end(), 
+        camstate.m_acc_set.begin(), camstate.m_acc_set.end());
+      curr_camstate.m_gyro_set.insert(curr_camstate.m_gyro_set.end(), 
+        camstate.m_gyro_set.begin(), camstate.m_gyro_set.end()); 
+    }
+    ROS_INFO("NEED ADD ACC, after ACC: %d, GYRO: %d",curr_camstate.m_acc_set.size(), curr_camstate.m_gyro_set.size());
+  }
+  
+  ROS_INFO("before camsize: %d, speed: %f, %f ,%f", state_server.cam_states.size(), curr_camstate.opti_speed[0], 
+    curr_camstate.opti_speed[1], curr_camstate.opti_speed[2]);
+
+  for (const auto& cam_id : rm_cam_state_ids) {
+    state_server.cam_states.erase(cam_id);
+  }
   return;
 }
 
@@ -1501,6 +1682,7 @@ void MsckfVio::onlineReset() {
 }
 
 void MsckfVio::publish(const ros::Time& time) {
+  
 
   // Convert the IMU frame to the body frame.
   const IMUState& imu_state = state_server.imu_state;
@@ -1508,6 +1690,9 @@ void MsckfVio::publish(const ros::Time& time) {
   T_i_w.linear() = quaternionToRotation(
       imu_state.orientation).transpose();
   T_i_w.translation() = imu_state.position;
+
+  ROS_INFO("time: %f, position: %f, %f, %f", imu_state.time, imu_state.position.x(),
+    imu_state.position.y(), imu_state.position.z());
 
   Eigen::Isometry3d T_b_w = IMUState::T_imu_body * T_i_w *
     IMUState::T_imu_body.inverse();
@@ -1590,6 +1775,8 @@ void MsckfVio::publish(const ros::Time& time) {
   }
   gt.translation() = gt_poses[gt_num].p;
   gt.linear() = gt_poses[gt_num].q.toRotationMatrix();
+
+  state_server.cam_states[state_server.imu_state.id].imu_orientation = gt_poses[gt_num].q;
 
   // cout << "gt time: " << gt_poses[gt_num].time << "imu time: "<< state_server.imu_state.time << "current gt num: " << gt_num << endl;
 
