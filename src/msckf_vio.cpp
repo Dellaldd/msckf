@@ -148,6 +148,7 @@ bool MsckfVio::loadParameters() {
       }
     }
 
+  cout << "Gt SIZE: " << gt_poses.size() << endl;
   // Frame id
   nh.param<string>("fixed_frame_id", fixed_frame_id, "world");
   nh.param<string>("child_frame_id", child_frame_id, "robot");
@@ -341,11 +342,11 @@ void MsckfVio::imuCallback(
     initializeGravityAndBias(msg);
   }
   
-  // if(msg->header.stamp.toSec() >= gt_poses[gt_num].time && !is_gt_time){
-  //   is_gt_time = true;
-  //   ROS_INFO("gt_num: %d, big gt_time: %f", gt_num, gt_poses[gt_num].time);
-  //   ROS_INFO("msg_time: %f", msg->header.stamp.toSec());
-  // }
+  if(msg->header.stamp.toSec() >= gt_poses[gt_num].time && !is_gt_time){
+    is_gt_time = true;
+    ROS_INFO("gt_num: %d, big gt_time: %f", gt_num, gt_poses[gt_num].time);
+    ROS_INFO("msg_time: %f", msg->header.stamp.toSec());
+  }
   
   return;
 }
@@ -386,7 +387,7 @@ void MsckfVio::initializeGravityAndBias(const sensor_msgs::ImuConstPtr& msg) {
   //   rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
 
   // return;
-
+  cout << "gt: " << gt_poses[0].time << endl;
   double time = msg->header.stamp.toSec();
   if(gt_poses[gt_num].time > msg->header.stamp.toSec()){
     ROS_INFO("big gt_time: %f", gt_poses[gt_num].time);
@@ -409,8 +410,8 @@ void MsckfVio::initializeGravityAndBias(const sensor_msgs::ImuConstPtr& msg) {
   gt_init = gt_num; 
   
   state_server.imu_state.time = gt_poses[gt_init].time;
-  cout << "gt_init: " << gt_init << endl;
-  cout << gt_poses[gt_init].p.transpose() << endl;
+  std::cout << "gt_init: " << gt_init << std::endl;
+  std::cout << gt_poses[gt_init].p.transpose() << std::endl;
   state_server.imu_state.orientation =
     rotationToQuaternion(gt_poses[gt_init].q.toRotationMatrix().cast<double>().transpose()); //T_w_imu
   state_server.imu_state.position = gt_poses[gt_init].p.cast<double>(); //p_imu_w
@@ -497,7 +498,7 @@ void MsckfVio::featureCallback(
     const CameraMeasurementConstPtr& msg) {
 
   // Return if the gravity vector has not been set.
-  if (!is_gravity_set) return;
+  if (!is_gt_time) return;
 
   // Start the system if the first image is received.
   // The frame where the first image is received will be
