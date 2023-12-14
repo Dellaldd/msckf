@@ -13,7 +13,7 @@ from msckf_vio.msg import BiasEstiInfo
 
 class Logger:
     def __init__(self):
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/v102/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
         self.f_gt = open(self.fold + "stamped_groundtruth.txt", 'w')
         self.f_gt_vel = open(self.fold + "groundtruth_velocity.txt", 'w')
         self.f_esti = open(self.fold + "stamped_traj_estimate.txt", 'w')
@@ -86,16 +86,17 @@ class Logger:
         self.f_feature.write('\r\n')
      
     def gt_Cb(self, msg):
-        self.gt_pose.append([str(msg.header.stamp.to_sec()), str(msg.pose.pose.position.x), str(msg.pose.pose.position.y),
-            str(msg.pose.pose.position.z), str(msg.pose.pose.orientation.x), 
-            str(msg.pose.pose.orientation.y),str(msg.pose.pose.orientation.z), 
-            str(msg.pose.pose.orientation.w)])
-        
-        self.gt_vel.append([str(msg.header.stamp.to_sec()), str(msg.pose.pose.position.x), str(msg.pose.pose.position.y),
-            str(msg.pose.pose.position.z), str(msg.pose.pose.orientation.x), 
-            str(msg.pose.pose.orientation.y),str(msg.pose.pose.orientation.z), 
-            str(msg.pose.pose.orientation.w), str(msg.twist.twist.linear.x), str(msg.twist.twist.linear.y),
-            str(msg.twist.twist.linear.z)])
+        if(msg.pose.pose.position.x != 0):
+            self.gt_pose.append([str(msg.header.stamp.to_sec()), str(msg.pose.pose.position.x), str(msg.pose.pose.position.y),
+                str(msg.pose.pose.position.z), str(msg.pose.pose.orientation.x), 
+                str(msg.pose.pose.orientation.y),str(msg.pose.pose.orientation.z), 
+                str(msg.pose.pose.orientation.w)])
+            
+            self.gt_vel.append([str(msg.header.stamp.to_sec()), str(msg.pose.pose.position.x), str(msg.pose.pose.position.y),
+                str(msg.pose.pose.position.z), str(msg.pose.pose.orientation.x), 
+                str(msg.pose.pose.orientation.y),str(msg.pose.pose.orientation.z), 
+                str(msg.pose.pose.orientation.w), str(msg.twist.twist.linear.x), str(msg.twist.twist.linear.y),
+                str(msg.twist.twist.linear.z)])
         
     
     def esti_Cb(self, msg):
