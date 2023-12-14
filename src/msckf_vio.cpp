@@ -66,6 +66,7 @@ bool MsckfVio::loadParameters() {
   // state_server.imu_state.gyro_bias = Eigen::Vector3d(-0.002153, 0.020744, 0.075806);
   state_server.imu_state.gyro_bias = Eigen::Vector3d(-0.0546303, 0.0208792, 0.094797);
 
+
   // gt
   ifstream ifs_gt;
   nh.param<string>("gt_path", gt_path, "/home/ldd/euroc/V1_01_easy/mav0/state_groundtruth_estimate0/V1_01_easy.txt");
@@ -1801,7 +1802,7 @@ void MsckfVio::publish(const ros::Time& time) {
   // state_server.imu_state.imu_orientation = gt_poses[gt_num].q;
   state_server.imu_state.imu_orientation = state_server.imu_state.orientation;
 
-  if(window.size() > 20){
+  if(window.size() > 10){
     vector<IMUState>::iterator rm_state = window.begin() ;
     window.erase(rm_state);
   }
