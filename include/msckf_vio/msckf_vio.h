@@ -175,7 +175,8 @@ class MsckfVio {
     // State vector
     StateServer state_server;
     // Maximum number of camera states
-    int max_cam_state_size;
+    int max_cam_state_size, use_imu_num;
+    Eigen::Vector3d opti_bias_acc, opti_bias_gyro;
 
     // Features used
     MapServer map_server;

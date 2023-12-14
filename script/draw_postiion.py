@@ -22,7 +22,7 @@ def quaternion_to_euler(q, degree_mode=1):
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/test/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/calibr_gyro_bias_noise/"
     gt_path = foldpath + "groundtruth_velocity.txt"
     esti_path = foldpath + "traj_estimate_velocity.txt"
     bias_path = foldpath + "bias.txt"
@@ -135,6 +135,16 @@ def main():
     ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.0546303, 'r-')
     ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.0208792, 'r-')
     ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.094797, 'r-') 
+    
+    ax2[0][0].plot(bias[start:end,0], bias[start:end,7], 'g-')
+    ax2[0][1].plot(bias[start:end,0], bias[start:end,8], 'g-')
+    ax2[0][2].plot(bias[start:end,0], bias[start:end,9], 'g-')
+    
+    ax2[1][0].plot(bias[start:end,0], bias[start:end,10], 'g-')
+    ax2[1][1].plot(bias[start:end,0], bias[start:end,11], 'g-')
+    ax2[1][2].plot(bias[start:end,0], bias[start:end,12], 'g-')  
+    
+    ax2[2][0].plot(bias[start:end,0], bias[start:end,13], 'g-')
     
     ax2[0, 0].set_title("acc_x(m^s-2)")
     ax2[0, 1].set_title("acc_y(m^s-2)")

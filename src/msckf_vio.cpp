@@ -602,11 +602,13 @@ void MsckfVio::featureCallback(
 }
 
 void MsckfVio::estiImuBias(const double time){
+
   IMUState& imu_state = state_server.imu_state;
   int used_msg = 0;
   double time_bound = imu_state.time;
   int id = 0;
-
+  Eigen::Vector3d sum_speed = Eigen::Vector3d::Zero();
+  int sum_num = 0;
   for(; id < speed_msg_buffer.size(); id++){
     double msg_time = speed_msg_buffer[id].first;
 
@@ -619,8 +621,11 @@ void MsckfVio::estiImuBias(const double time){
       break;
     }  
     ++used_msg;
+    sum_speed += speed_msg_buffer[id].second;
+    sum_num ++;
   }
 
+  // linear 
   if(id > 0){
     Eigen::Vector3d prev_speed = speed_msg_buffer[id-1].second;
     double prev_time = speed_msg_buffer[id-1].first;
@@ -631,7 +636,9 @@ void MsckfVio::estiImuBias(const double time){
   }else
     imu_state.opti_speed = speed_msg_buffer[id].second;
   
-  
+  // average
+  // imu_state.opti_speed = sum_speed / sum_num;
+
   speed_msg_buffer.erase(speed_msg_buffer.begin(),
       speed_msg_buffer.begin()+used_msg);
 
@@ -723,8 +730,14 @@ void MsckfVio::estiImuBias(const double time){
   imu_state.gyro_bias[0] = bias_w[0];
   imu_state.gyro_bias[1] = bias_w[1];
   imu_state.gyro_bias[2] = bias_w[2];
+  
+  opti_bias_acc = Eigen::Vector3d(bias_a[0], bias_a[1], bias_a[2]);
+  opti_bias_gyro = Eigen::Vector3d(bias_w[0], bias_w[1], bias_w[2]);
+
   ROS_INFO("bias_a: %f, %f, %f, bias_w: %f, %f, %f", bias_a[0], bias_a[1], bias_a[2], 
     bias_w[0], bias_w[1], bias_w[2]);
+  
+
   return;
 }
 
@@ -797,7 +810,7 @@ void MsckfVio::mocapOdomCallback(
 void MsckfVio::batchImuProcessing(const double& time_bound) {
   // Counter how many IMU msgs in the buffer are used.
   int used_imu_msg_cntr = 0;
-  
+  use_imu_num = 0;
 
   for (const auto& imu_msg : imu_msg_buffer) {
     double imu_time = imu_msg.header.stamp.toSec();
@@ -815,6 +828,7 @@ void MsckfVio::batchImuProcessing(const double& time_bound) {
     // Execute process model.
     processModel(imu_time, m_gyro, m_acc);
     ++used_imu_msg_cntr;
+    use_imu_num ++;
   }
 
   // Set the state ID for the new IMU state.
@@ -1462,12 +1476,12 @@ void MsckfVio::findRedundantCamStates(
         tracking_rate > tracking_rate_threshold) {
       rm_cam_state_ids.push_back(cam_state_iter->first);
       ++cam_state_iter;
-      ROS_INFO("remove last frame!");
+      // ROS_INFO("remove last frame!");
       remove_first = false;
     } else {
       rm_cam_state_ids.push_back(first_cam_state_iter->first);
       ++first_cam_state_iter;
-      ROS_INFO("remove first frame!");
+      // ROS_INFO("remove first frame!");
       remove_first = true;
     }
   }
@@ -1791,8 +1805,7 @@ void MsckfVio::publish(const ros::Time& time) {
     vector<IMUState>::iterator rm_state = window.begin() ;
     window.erase(rm_state);
   }
-  window.push_back(state_server.imu_state);
-    
+  window.push_back(state_server.imu_state);    
 
   nav_msgs::Odometry odom_gt;
   odom_gt.header.stamp = time;
@@ -1813,6 +1826,14 @@ void MsckfVio::publish(const ros::Time& time) {
   bias_info.bias_gyro_x = imu_state.gyro_bias(0);
   bias_info.bias_gyro_y = imu_state.gyro_bias(1);
   bias_info.bias_gyro_z = imu_state.gyro_bias(2);
+
+  bias_info.use_imu_num = use_imu_num;
+  bias_info.opti_bias_acc_x = opti_bias_acc[0];
+  bias_info.opti_bias_acc_y = opti_bias_acc[1];
+  bias_info.opti_bias_acc_z = opti_bias_acc[2];
+  bias_info.opti_bias_gyro_x = opti_bias_gyro[0];
+  bias_info.opti_bias_gyro_y = opti_bias_gyro[1];
+  bias_info.opti_bias_gyro_z = opti_bias_gyro[2];
 
   esti_info_pub.publish(bias_info);
 

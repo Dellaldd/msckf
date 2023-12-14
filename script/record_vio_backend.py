@@ -19,7 +19,6 @@ class Logger:
         self.f_esti = open(self.fold + "stamped_traj_estimate.txt", 'w')
         self.f_esti_vel = open(self.fold + "traj_estimate_velocity.txt", 'w')
         self.f_bias = open(self.fold + "bias.txt", 'w')
-        self.f_feature = open(self.fold + "feature.txt", 'w')
         
         self.gt_pose = []
         self.gt_vel = []
@@ -40,7 +39,8 @@ class Logger:
     
     def bias_Cb(self, msg):
         self.bias_data.append([str(msg.header.stamp.to_sec()), str(msg.bias_acc_x), str(msg.bias_acc_y), str(msg.bias_acc_z)
-                               , str(msg.bias_gyro_x), str(msg.bias_gyro_y), str(msg.bias_gyro_z)])
+                               , str(msg.bias_gyro_x), str(msg.bias_gyro_y), str(msg.bias_gyro_z), str(msg.opti_bias_acc_x), str(msg.opti_bias_acc_y), str(msg.opti_bias_acc_z)
+                               , str(msg.opti_bias_gyro_x), str(msg.opti_bias_gyro_y), str(msg.opti_bias_gyro_z), str(msg.use_imu_num)])
     
     def write_data(self):
         for data in self.gt_pose:
@@ -63,11 +63,7 @@ class Logger:
         for data in self.bias_data:
             self.f_bias.write(' '.join(data))
             self.f_bias.write('\r\n')
-            
-        for data in self.feature:
-            self.f_feature.write(' '.join(data))
-            self.f_feature.write('\r\n')
-              
+                          
     def write_title(self):
         self.f_gt.write("# timestamp tx ty tz qx qy qz qw")
         self.f_gt.write('\r\n')
@@ -82,8 +78,6 @@ class Logger:
         self.f_bias.write("time bias_acc_x bias_acc_y bias_acc_z bias_gyro_x bias_gyro_u bias_gyro_z use_imu_num imu_dataset_size imu_measure_id")
         self.f_bias.write('\r\n')
         
-        self.f_feature.write("id x y z")
-        self.f_feature.write('\r\n')
      
     def gt_Cb(self, msg):
         if(msg.pose.pose.position.x != 0):
@@ -110,11 +104,7 @@ class Logger:
             str(msg.pose.pose.orientation.y),str(msg.pose.pose.orientation.z), 
             str(msg.pose.pose.orientation.w), str(msg.twist.twist.linear.x), str(msg.twist.twist.linear.y),
             str(msg.twist.twist.linear.z)])
-    
-    def feature_Cb(self, msg):
-        for i in range(len(msg.position)):
-            self.feature.append([str(msg.position[i].id), str(msg.position[i].x), str(msg.position[i].y), str(msg.position[i].z)])
-        
+            
 def main():
     print("start record!")
     rospy.init_node('record_node', anonymous=True)
@@ -127,7 +117,6 @@ def main():
     logger.f_gt.close()
     logger.f_esti.close()
     logger.f_bias.close()
-    logger.f_feature.close()
 
 
 if __name__ == '__main__':

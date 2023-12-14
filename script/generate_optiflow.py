@@ -67,13 +67,13 @@ def ReadIMU(filename):
     print("Total add %i imus!"%(imu.shape[0]))
     return timestamp, imu_data
 
-def CreateBag(foldpath, noise, deviation):
+def CreateBag(foldpath, noise, deviation, bag_save_path):
     # imu
     imutimesteps, imudata = ReadIMU(foldpath) 
     speedtimesteps, speeddata = ReadSpeed(foldpath)
     cameratimesteps, cam0, cam1 = ReadImages(foldpath) 
        
-    bag = rosbag.Bag(foldpath + "data.bag", 'w')
+    bag = rosbag.Bag(bag_save_path + "data.bag", 'w')
 
     br = CvBridge()
 
@@ -135,8 +135,9 @@ def CreateBag(foldpath, noise, deviation):
 
 
 if __name__ == "__main__":
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/v102_noise/"
-    noise = 0.01
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/v102/"
+    bag_save_path = foldpath + "noise_0_1/"
+    noise = 0.1
     deviation = 1
     print(foldpath)
-    CreateBag(foldpath, noise, deviation)
+    CreateBag(foldpath, noise, deviation, bag_save_path)
