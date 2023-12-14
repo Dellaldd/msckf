@@ -1801,7 +1801,7 @@ void MsckfVio::publish(const ros::Time& time) {
   // state_server.imu_state.imu_orientation = gt_poses[gt_num].q;
   state_server.imu_state.imu_orientation = state_server.imu_state.orientation;
 
-  if(window.size() > 10){
+  if(window.size() > 20){
     vector<IMUState>::iterator rm_state = window.begin() ;
     window.erase(rm_state);
   }

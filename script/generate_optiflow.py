@@ -74,7 +74,8 @@ def CreateBag(foldpath, noise, deviation, bag_save_path):
     cameratimesteps, cam0, cam1 = ReadImages(foldpath) 
        
     bag = rosbag.Bag(bag_save_path + "data.bag", 'w')
-
+    f_opti_speed = open(bag_save_path + "/opti_speed.txt", 'w')
+    
     br = CvBridge()
 
     for i in range(len(imudata)):
@@ -97,6 +98,7 @@ def CreateBag(foldpath, noise, deviation, bag_save_path):
         
         bag.write("/imu",imu,imuStamp)
     
+    opti_speed = []
     for i in range(len(speedtimesteps)):
         speed = Vector3Stamped()           
         speedStamp = rospy.rostime.Time.from_sec(float(speedtimesteps[i] * 1e-9))
@@ -105,6 +107,7 @@ def CreateBag(foldpath, noise, deviation, bag_save_path):
         speed.vector.y = float(speeddata[i][1] + random.gauss(0, deviation) * noise)
         speed.vector.z = float(speeddata[i][2] + random.gauss(0, deviation) * noise)
         
+        opti_speed.append(np.array([speedtimesteps[i], speed.vector.x, speed.vector.y, speed.vector.z]))
         bag.write("/speed", speed, speedStamp)
     
     for i in range(len(cameratimesteps)):  
@@ -133,11 +136,19 @@ def CreateBag(foldpath, noise, deviation, bag_save_path):
             img1_msg.encoding = "mono8"
             bag.write('/cam1', img1_msg, camstamp)
 
+    # write opti speed to txt
+    f_opti_speed.write('time x y z')
+    f_opti_speed.write('\r\n')
+    for id in range(len(opti_speed)):
+        data = [str(opti_speed[id][0]), str(opti_speed[id][1]), str(opti_speed[id][2]), str(opti_speed[id][3])]
+        f_opti_speed.write(' '.join(data))
+        f_opti_speed.write('\r\n')
+    f_opti_speed.close()
 
 if __name__ == "__main__":
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/v102/"
-    bag_save_path = foldpath + "noise_0_1/"
-    noise = 0.1
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/v202/"
+    bag_save_path = foldpath + "no_noise/"
+    noise = 0
     deviation = 1
     print(foldpath)
     CreateBag(foldpath, noise, deviation, bag_save_path)
