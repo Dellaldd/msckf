@@ -12,9 +12,9 @@ using namespace Eigen;
 namespace msckf_vio{
 class BiasError {
 public:
-    BiasError(double prev_time, Eigen::Vector3d prev_acc, Eigen::Vector3d prev_gyro, Eigen::Vector3d speed_i, Eigen::Vector3d speed_j, std::vector<std::pair<double, Eigen::Vector3d>> acc_set,
+    BiasError(Eigen::Vector3d gyro_bias, double prev_time, Eigen::Vector3d prev_acc, Eigen::Vector3d prev_gyro, Eigen::Vector3d speed_i, Eigen::Vector3d speed_j, std::vector<std::pair<double, Eigen::Vector3d>> acc_set,
         std::vector<std::pair<double, Eigen::Vector3d>> gyro_set, Eigen::Quaterniond orien):
-        prev_time(prev_time), prev_acc(prev_acc), prev_gyro(prev_gyro), speed_i(speed_i), speed_j(speed_j), acc_set(acc_set), gyro_set(gyro_set), orien(orien){}
+        gyro_bias(gyro_bias), prev_time(prev_time), prev_acc(prev_acc), prev_gyro(prev_gyro), speed_i(speed_i), speed_j(speed_j), acc_set(acc_set), gyro_set(gyro_set), orien(orien){}
                                                                            
     template<typename T>
     bool operator()(const T *const ba, const T *const bw, T *residuals) const {
@@ -58,6 +58,10 @@ public:
         residuals[0] = ceres::abs(opti_speed[0] - vel[0]);
         residuals[1] = ceres::abs(opti_speed[1] - vel[1]);
         residuals[2] = ceres::abs(opti_speed[2] - vel[2]);
+
+        residuals[3] = T(10) * ceres::abs(bw[0] - T(gyro_bias[0]));
+        residuals[4] = T(10) * ceres::abs(bw[1] - T(gyro_bias[1]));
+        residuals[5] = T(10) * ceres::abs(bw[2] - T(gyro_bias[2]));
               
         return true;
     }
@@ -66,6 +70,7 @@ public:
 
 
 private:
+  Eigen::Vector3d gyro_bias;
   Eigen::Vector3d speed_i, speed_j, prev_acc, prev_gyro; 
   std::vector<std::pair<double, Eigen::Vector3d>> acc_set, gyro_set;
   Eigen::Quaterniond orien;

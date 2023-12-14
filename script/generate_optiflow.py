@@ -11,6 +11,7 @@ from geometry_msgs.msg import Vector3, Quaternion, Vector3Stamped
 import numpy as np
 from PIL import Image as ImagePIL
 from cv_bridge import CvBridge
+import random
 
 def ReadImages(filename):
     path = filename + "/cam1/data.txt"
@@ -66,7 +67,7 @@ def ReadIMU(filename):
     print("Total add %i imus!"%(imu.shape[0]))
     return timestamp, imu_data
 
-def CreateBag(foldpath):
+def CreateBag(foldpath, noise, deviation):
     # imu
     imutimesteps, imudata = ReadIMU(foldpath) 
     speedtimesteps, speeddata = ReadSpeed(foldpath)
@@ -100,9 +101,9 @@ def CreateBag(foldpath):
         speed = Vector3Stamped()           
         speedStamp = rospy.rostime.Time.from_sec(float(speedtimesteps[i] * 1e-9))
         speed.header.stamp = speedStamp
-        speed.vector.x = float(speeddata[i][0])
-        speed.vector.y = float(speeddata[i][1])
-        speed.vector.z = float(speeddata[i][2])
+        speed.vector.x = float(speeddata[i][0] + random.gauss(0, deviation) * noise)
+        speed.vector.y = float(speeddata[i][1] + random.gauss(0, deviation) * noise)
+        speed.vector.z = float(speeddata[i][2] + random.gauss(0, deviation) * noise)
         
         bag.write("/speed", speed, speedStamp)
     
@@ -132,7 +133,10 @@ def CreateBag(foldpath):
             img1_msg.encoding = "mono8"
             bag.write('/cam1', img1_msg, camstamp)
 
+
 if __name__ == "__main__":
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/v102/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/v102_noise/"
+    noise = 0.01
+    deviation = 1
     print(foldpath)
-    CreateBag(foldpath)
+    CreateBag(foldpath, noise, deviation)

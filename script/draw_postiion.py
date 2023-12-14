@@ -120,13 +120,21 @@ def main():
     plt.savefig(save_position_path, dpi=300)
 
     fig2, ax2 = plt.subplots(4, 3)
-    ax2[0][0].plot(bias[start:end,0], bias[start:end,1], 'r-')
-    ax2[0][1].plot(bias[start:end,0], bias[start:end,2], 'r-')
-    ax2[0][2].plot(bias[start:end,0], bias[start:end,3], 'r-')
+    ax2[0][0].plot(bias[start:end,0], bias[start:end,1], 'b-')
+    ax2[0][1].plot(bias[start:end,0], bias[start:end,2], 'b-')
+    ax2[0][2].plot(bias[start:end,0], bias[start:end,3], 'b-')
     
-    ax2[1][0].plot(bias[start:end,0], bias[start:end,4], 'r-')
-    ax2[1][1].plot(bias[start:end,0], bias[start:end,5], 'r-')
-    ax2[1][2].plot(bias[start:end,0], bias[start:end,6], 'r-')  
+    ax2[1][0].plot(bias[start:end,0], bias[start:end,4], 'b-')
+    ax2[1][1].plot(bias[start:end,0], bias[start:end,5], 'b-')
+    ax2[1][2].plot(bias[start:end,0], bias[start:end,6], 'b-')  
+    
+    # ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.002153, 'r-')
+    # ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.020744, 'r-')
+    # ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.075806, 'r-')  
+ 
+    ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.0546303, 'r-')
+    ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.0208792, 'r-')
+    ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.094797, 'r-') 
     
     ax2[0, 0].set_title("acc_x(m^s-2)")
     ax2[0, 1].set_title("acc_y(m^s-2)")

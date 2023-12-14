@@ -86,16 +86,17 @@ class Logger:
         self.f_feature.write('\r\n')
      
     def gt_Cb(self, msg):
-        self.gt_pose.append([str(msg.header.stamp.to_sec()), str(msg.pose.pose.position.x), str(msg.pose.pose.position.y),
-            str(msg.pose.pose.position.z), str(msg.pose.pose.orientation.x), 
-            str(msg.pose.pose.orientation.y),str(msg.pose.pose.orientation.z), 
-            str(msg.pose.pose.orientation.w)])
-        
-        self.gt_vel.append([str(msg.header.stamp.to_sec()), str(msg.pose.pose.position.x), str(msg.pose.pose.position.y),
-            str(msg.pose.pose.position.z), str(msg.pose.pose.orientation.x), 
-            str(msg.pose.pose.orientation.y),str(msg.pose.pose.orientation.z), 
-            str(msg.pose.pose.orientation.w), str(msg.twist.twist.linear.x), str(msg.twist.twist.linear.y),
-            str(msg.twist.twist.linear.z)])
+        if(msg.pose.pose.position.x != 0):
+            self.gt_pose.append([str(msg.header.stamp.to_sec()), str(msg.pose.pose.position.x), str(msg.pose.pose.position.y),
+                str(msg.pose.pose.position.z), str(msg.pose.pose.orientation.x), 
+                str(msg.pose.pose.orientation.y),str(msg.pose.pose.orientation.z), 
+                str(msg.pose.pose.orientation.w)])
+            
+            self.gt_vel.append([str(msg.header.stamp.to_sec()), str(msg.pose.pose.position.x), str(msg.pose.pose.position.y),
+                str(msg.pose.pose.position.z), str(msg.pose.pose.orientation.x), 
+                str(msg.pose.pose.orientation.y),str(msg.pose.pose.orientation.z), 
+                str(msg.pose.pose.orientation.w), str(msg.twist.twist.linear.x), str(msg.twist.twist.linear.y),
+                str(msg.twist.twist.linear.z)])
         
     
     def esti_Cb(self, msg):

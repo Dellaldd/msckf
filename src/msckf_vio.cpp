@@ -63,6 +63,9 @@ MsckfVio::MsckfVio(ros::NodeHandle& pnh):
 }
 
 bool MsckfVio::loadParameters() {
+  // state_server.imu_state.gyro_bias = Eigen::Vector3d(-0.002153, 0.020744, 0.075806);
+  state_server.imu_state.gyro_bias = Eigen::Vector3d(-0.0546303, 0.0208792, 0.094797);
+
   // gt
   ifstream ifs_gt;
   nh.param<string>("gt_path", gt_path, "/home/ldd/euroc/V1_01_easy/mav0/state_groundtruth_estimate0/V1_01_easy.txt");
@@ -587,10 +590,10 @@ void MsckfVio::featureCallback(
     //    state_augmentation_time, state_augmentation_time/processing_time);
     //printf("Add observations time: %f/%f\n",
     //    add_observations_time, add_observations_time/processing_time);
-    printf("Remove lost features time: %f/%f\n",
-        remove_lost_features_time, remove_lost_features_time/processing_time);
-    printf("Remove camera states time: %f/%f\n",
-        prune_cam_states_time, prune_cam_states_time/processing_time);
+    // printf("Remove lost features time: %f/%f\n",
+    //     remove_lost_features_time, remove_lost_features_time/processing_time);
+    // printf("Remove camera states time: %f/%f\n",
+    //     prune_cam_states_time, prune_cam_states_time/processing_time);
     //printf("Publish time: %f/%f\n",
     //    publish_time, publish_time/processing_time);
   }
@@ -690,8 +693,8 @@ void MsckfVio::estiImuBias(const double time){
       std::vector<std::pair<double, Eigen::Vector3d>> acc_set = imu_state.m_acc_set;
       std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = imu_state.m_gyro_set;
 
-      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 3, 3, 3>(
-        new BiasError(prev_time, prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
+      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 6, 3, 3>(
+        new BiasError(state_server.imu_state.gyro_bias, prev_time, prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
       problem.AddResidualBlock(cost_function, NULL, bias_a, bias_w);  
 
     }else{      
@@ -700,8 +703,8 @@ void MsckfVio::estiImuBias(const double time){
       std::vector<std::pair<double, Eigen::Vector3d>> acc_set = next->m_acc_set;
       std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = next->m_gyro_set;
 
-      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 3, 3, 3>(
-        new BiasError(prev_time, prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
+      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 6, 3, 3>(
+        new BiasError(state_server.imu_state.gyro_bias, prev_time, prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
       problem.AddResidualBlock(cost_function, NULL, bias_a, bias_w);
     }
   }
