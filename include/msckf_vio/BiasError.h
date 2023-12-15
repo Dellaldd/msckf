@@ -47,8 +47,8 @@ public:
 
             Eigen::Matrix<T, 3, 1> un_acc_g_0 = q * acc_no_bias0 + G;
             Eigen::Matrix<T, 3, 1> un_gyr = T(0.5) * (gyro_no_bias0 + gyro_no_bias) ;
-            // q = q * Eigen::Quaternion<T>(T(1), un_gyr(0) * dt / T(2), un_gyr(1) * dt / T(2), un_gyr(2) * dt / T(2));
-            // q.normalize();
+            q = q * Eigen::Quaternion<T>(T(1), un_gyr(0) * dt / T(2), un_gyr(1) * dt / T(2), un_gyr(2) * dt / T(2));
+            q.normalize();
             Eigen::Matrix<T, 3, 1> un_acc_g_1 = q * acc_no_bias + G; 
             Eigen::Matrix<T, 3, 1> un_acc_g = T(0.5) * (un_acc_g_0 + un_acc_g_1);
 
@@ -59,13 +59,13 @@ public:
         residuals[1] = ceres::abs(opti_speed[1] - vel[1]);
         residuals[2] = ceres::abs(opti_speed[2] - vel[2]);
 
-        // residuals[3] = T(10) * ceres::abs(bw[0] - T(gyro_bias[0]));
-        // residuals[4] = T(10) * ceres::abs(bw[1] - T(gyro_bias[1]));
-        // residuals[5] = T(10) * ceres::abs(bw[2] - T(gyro_bias[2]));
+        residuals[3] = T(10) * ceres::abs(bw[0] - T(gyro_bias[0]));
+        residuals[4] = T(10) * ceres::abs(bw[1] - T(gyro_bias[1]));
+        residuals[5] = T(10) * ceres::abs(bw[2] - T(gyro_bias[2]));
 
-        residuals[3] = ceres::abs(bw[0] - T(gyro_bias[0]));
-        residuals[4] = ceres::abs(bw[1] - T(gyro_bias[1]));
-        residuals[5] = ceres::abs(bw[2] - T(gyro_bias[2]));
+        // residuals[3] = ceres::abs(bw[0] - T(gyro_bias[0]));
+        // residuals[4] = ceres::abs(bw[1] - T(gyro_bias[1]));
+        // residuals[5] = ceres::abs(bw[2] - T(gyro_bias[2]));
               
         return true;
     }

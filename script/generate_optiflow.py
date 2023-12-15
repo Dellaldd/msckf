@@ -103,9 +103,14 @@ def CreateBag(foldpath, noise, deviation, bag_save_path):
         speed = Vector3Stamped()           
         speedStamp = rospy.rostime.Time.from_sec(float(speedtimesteps[i] * 1e-9))
         speed.header.stamp = speedStamp
-        speed.vector.x = float(speeddata[i][0] + random.gauss(0, deviation) * noise)
-        speed.vector.y = float(speeddata[i][1] + random.gauss(0, deviation) * noise)
-        speed.vector.z = float(speeddata[i][2] + random.gauss(0, deviation) * noise)
+        if( not noise):
+            speed.vector.x = float(speeddata[i][0] + random.gauss(0, deviation) * noise)
+            speed.vector.y = float(speeddata[i][1] + random.gauss(0, deviation) * noise)
+            speed.vector.z = float(speeddata[i][2] + random.gauss(0, deviation) * noise)
+        else:
+            speed.vector.x = float(speeddata[i][0])
+            speed.vector.y = float(speeddata[i][1])
+            speed.vector.z = float(speeddata[i][2])
         
         opti_speed.append(np.array([speedtimesteps[i], speed.vector.x, speed.vector.y, speed.vector.z]))
         bag.write("/speed", speed, speedStamp)

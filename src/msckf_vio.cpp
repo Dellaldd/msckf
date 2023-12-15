@@ -675,6 +675,7 @@ void MsckfVio::estiImuBias(const double time){
   if(window.size() < 5)
     return;
 
+  // repropagate();
   ceres::Problem problem;
   // double bias_a[3] = {imu_state.acc_bias[0], imu_state.acc_bias[1], imu_state.acc_bias[2]}; 
   // double bias_a[3] = {-0.013337, 0.103464, 0.093086};
@@ -708,7 +709,7 @@ void MsckfVio::estiImuBias(const double time){
 
       ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 6, 3, 3>(
         new BiasError(state_server.imu_state.gyro_bias, prev_time, prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
-      problem.AddResidualBlock(cost_function, NULL, bias_a, bias_w);  
+      problem.AddResidualBlock(cost_function, loss_function, bias_a, bias_w);  
 
     }else{      
       Eigen::Vector3d speed_i = cam->opti_speed;
@@ -718,7 +719,7 @@ void MsckfVio::estiImuBias(const double time){
 
       ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 6, 3, 3>(
         new BiasError(state_server.imu_state.gyro_bias, prev_time, prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
-      problem.AddResidualBlock(cost_function, NULL, bias_a, bias_w);
+      problem.AddResidualBlock(cost_function, loss_function, bias_a, bias_w);
     }
   }
 
@@ -743,7 +744,7 @@ void MsckfVio::estiImuBias(const double time){
   ROS_INFO("bias_a: %f, %f, %f, bias_w: %f, %f, %f", bias_a[0], bias_a[1], bias_a[2], 
     bias_w[0], bias_w[1], bias_w[2]);
   
-  // repropagate();
+  repropagate();
 
   return;
 }
