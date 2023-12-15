@@ -59,9 +59,13 @@ public:
         residuals[1] = ceres::abs(opti_speed[1] - vel[1]);
         residuals[2] = ceres::abs(opti_speed[2] - vel[2]);
 
-        residuals[3] = T(10) * ceres::abs(bw[0] - T(gyro_bias[0]));
-        residuals[4] = T(10) * ceres::abs(bw[1] - T(gyro_bias[1]));
-        residuals[5] = T(10) * ceres::abs(bw[2] - T(gyro_bias[2]));
+        // residuals[3] = T(10) * ceres::abs(bw[0] - T(gyro_bias[0]));
+        // residuals[4] = T(10) * ceres::abs(bw[1] - T(gyro_bias[1]));
+        // residuals[5] = T(10) * ceres::abs(bw[2] - T(gyro_bias[2]));
+
+        residuals[3] = ceres::abs(bw[0] - T(gyro_bias[0]));
+        residuals[4] = ceres::abs(bw[1] - T(gyro_bias[1]));
+        residuals[5] = ceres::abs(bw[2] - T(gyro_bias[2]));
               
         return true;
     }

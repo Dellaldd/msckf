@@ -63,12 +63,15 @@ MsckfVio::MsckfVio(ros::NodeHandle& pnh):
 }
 
 bool MsckfVio::loadParameters() {
+  state_server.imu_state.gyro_bias = Eigen::Vector3d(-0.002341, 0.021815, 0.076602);
   // state_server.imu_state.gyro_bias = Eigen::Vector3d(-0.002153, 0.020744, 0.075806);
-  state_server.imu_state.gyro_bias = Eigen::Vector3d(-0.0546303, 0.0208792, 0.094797);
+  // state_server.imu_state.gyro_bias = Eigen::Vector3d(-0.0546303, 0.0208792, 0.094797);
 
 
   // gt
   ifstream ifs_gt;
+  
+
   nh.param<string>("gt_path", gt_path, "/home/ldd/euroc/V1_01_easy/mav0/state_groundtruth_estimate0/V1_01_easy.txt");
   nh.param<string>("gt_type", gt_type, "euroc");
 
@@ -95,6 +98,7 @@ bool MsckfVio::loadParameters() {
 
   // euroc 
   if(gt_type == "euroc"){
+    cout << "gt_type: " << gt_type << endl;
     s_gt = ",";
     for(int i=1; i<lines_gt.size(); ++i){
       vec_gt = split_vec(lines_gt[i],s_gt);
@@ -157,6 +161,7 @@ bool MsckfVio::loadParameters() {
       }
     }
 
+  cout << "GT_SIZE: " << gt_poses.size() << endl;
   // Frame id
   nh.param<string>("fixed_frame_id", fixed_frame_id, "world");
   nh.param<string>("child_frame_id", child_frame_id, "robot");

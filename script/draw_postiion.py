@@ -22,7 +22,7 @@ def quaternion_to_euler(q, degree_mode=1):
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf_optiflow/v203/no_noise/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf_optiflow/v103/no_noise/"
     gt_path = foldpath + "groundtruth_velocity.txt"
     esti_path = foldpath + "traj_estimate_velocity.txt"
     bias_path = foldpath + "bias.txt"
@@ -132,9 +132,14 @@ def main():
     # ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.020744, 'r-')
     # ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.075806, 'r-')  
  
-    ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.0546303, 'r-')
-    ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.0208792, 'r-')
-    ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.094797, 'r-') 
+    # ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.0546303, 'r-')
+    # ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.0208792, 'r-')
+    # ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.094797, 'r-') 
+    
+    # -0.002341, 0.021815, 0.07660
+    ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.002341, 'r-')
+    ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.021815, 'r-')
+    ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.07660, 'r-')
     
     ax2[0][0].plot(bias[start:end,0], bias[start:end,7], 'g-')
     ax2[0][1].plot(bias[start:end,0], bias[start:end,8], 'g-')
