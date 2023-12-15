@@ -743,8 +743,44 @@ void MsckfVio::estiImuBias(const double time){
   ROS_INFO("bias_a: %f, %f, %f, bias_w: %f, %f, %f", bias_a[0], bias_a[1], bias_a[2], 
     bias_w[0], bias_w[1], bias_w[2]);
   
+  // repropagate();
 
   return;
+}
+
+void MsckfVio::repropagate(){
+  Eigen::Quaterniond re_q(window.front().imu_orientation);
+  
+  Eigen::Vector3d prev_gyro;
+  double time_bound;
+
+  for(int re_frame_count = 1; re_frame_count < window.size(); re_frame_count++){
+    IMUState state = window[re_frame_count];
+    prev_gyro = window[re_frame_count-1].m_gyro_set.back().second;
+    time_bound = window[re_frame_count-1].time;
+
+    for(int i = 0; i < state.m_acc_set.size(); i++){
+      Eigen::Vector3d gyro = state.m_gyro_set[i].second;
+      Eigen::Vector3d gyro0;
+      double dt;
+
+      if(i == 0){
+        dt = state.m_gyro_set[i].first - time_bound;
+        gyro0 = prev_gyro;
+      }else{
+        dt = state.m_gyro_set[i].first - state.m_gyro_set[i - 1].first;
+        gyro0 = state.m_gyro_set[i-1].second;
+      }
+
+      Eigen::Vector3d gyro_no_bias0 = gyro0 - state_server.imu_state.gyro_bias;
+      Eigen::Vector3d gyro_no_bias = gyro - state_server.imu_state.gyro_bias;
+
+      Eigen::Vector3d un_gyr = 0.5 * (gyro_no_bias0 + gyro_no_bias) ;
+      re_q = re_q * Eigen::Quaterniond(1, un_gyr(0) * dt / 2, un_gyr(1) * dt / 2, un_gyr(2) * dt / 2);
+      re_q.normalize();
+    }
+    window[re_frame_count].imu_orientation = re_q;
+  }
 }
 
 void MsckfVio::mocapOdomCallback(

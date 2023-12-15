@@ -131,7 +131,9 @@ class MsckfVio {
         std_srvs::Trigger::Response& res);
 
     void estiImuBias(const double time);
-
+    
+    void repropagate();
+    
     // Filter related functions
     // Propogate the state
     void batchImuProcessing(

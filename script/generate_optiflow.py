@@ -146,7 +146,7 @@ def CreateBag(foldpath, noise, deviation, bag_save_path):
     f_opti_speed.close()
 
 if __name__ == "__main__":
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/v103/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/mh05/"
     bag_save_path = foldpath + "no_noise/"
     noise = 0
     deviation = 1
