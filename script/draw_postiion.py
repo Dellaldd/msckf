@@ -22,11 +22,15 @@ def quaternion_to_euler(q, degree_mode=1):
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf_optiflow/mh05/no_noise/"
-    gt_path = foldpath + "groundtruth_velocity.txt"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf_optiflow/test/"
+    msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/mh05/"
+    
+    gt_path = foldpath + "groundtruth_velocity.txt"  
     esti_path = foldpath + "traj_estimate_velocity.txt"
     bias_path = foldpath + "bias.txt"
+    msckf_bias_path = msckf_foldpath + "bias.txt"
     is_euroc = True
+    use_msckf = True
     
     save_position_path = foldpath + "position.png"
     save_bias_path = foldpath + "bias.png"
@@ -34,6 +38,7 @@ def main():
     gt = np.loadtxt(gt_path, delimiter=' ', skiprows=1)
     esti = np.loadtxt(esti_path, delimiter=' ', skiprows=1)
     bias = np.loadtxt(bias_path, delimiter=' ', skiprows=1)
+    msckf_bias = np.loadtxt(msckf_bias_path, delimiter=' ', skiprows=1)
     
     print(gt.shape)
     eulers = []
@@ -41,7 +46,6 @@ def main():
     error_pos = []
     
     end = min(esti.shape[0], gt.shape[0])
-    # end = 194
     start = 0
     for i in range(end):
         q = [esti[i,4], esti[i,5], esti[i,6], esti[i,7]]
@@ -137,19 +141,28 @@ def main():
     # ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.094797, 'r-') 
     
     # -0.002341, 0.021815, 0.07660
-    ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.002341, 'r-')
-    ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.021815, 'r-')
-    ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.07660, 'r-')
+    ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.002341, 'r-', label = 'gt')
+    ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.021815, 'r-', label = 'gt')
+    ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.07660, 'r-', label = 'gt')
     
-    ax2[0][0].plot(bias[start:end,0], bias[start:end,7], 'g-')
-    ax2[0][1].plot(bias[start:end,0], bias[start:end,8], 'g-')
-    ax2[0][2].plot(bias[start:end,0], bias[start:end,9], 'g-')
+    ax2[0][0].plot(bias[start:end,0], bias[start:end,7], 'g-', label = 'opti_bias')
+    ax2[0][1].plot(bias[start:end,0], bias[start:end,8], 'g-', label = 'opti_bias')
+    ax2[0][2].plot(bias[start:end,0], bias[start:end,9], 'g-', label = 'opti_bias')
     
-    ax2[1][0].plot(bias[start:end,0], bias[start:end,10], 'g-')
-    ax2[1][1].plot(bias[start:end,0], bias[start:end,11], 'g-')
-    ax2[1][2].plot(bias[start:end,0], bias[start:end,12], 'g-')  
+    ax2[1][0].plot(bias[start:end,0], bias[start:end,10], 'g-', label = 'opti_bias')
+    ax2[1][1].plot(bias[start:end,0], bias[start:end,11], 'g-', label = 'opti_bias')
+    ax2[1][2].plot(bias[start:end,0], bias[start:end,12], 'g-', label = 'opti_bias')  
     
     ax2[2][0].plot(bias[start:end,0], bias[start:end,13], 'g-')
+    
+    if(use_msckf):
+        ax2[0][0].plot(msckf_bias[start:end,0], msckf_bias[start:end,1], 'y-', label = 'msckf')
+        ax2[0][1].plot(msckf_bias[start:end,0], msckf_bias[start:end,2], 'y-', label = 'msckf')
+        ax2[0][2].plot(msckf_bias[start:end,0], msckf_bias[start:end,3], 'y-', label = 'msckf')
+        
+        ax2[1][0].plot(msckf_bias[start:end,0], msckf_bias[start:end,4], 'y-', label = 'msckf')
+        ax2[1][1].plot(msckf_bias[start:end,0], msckf_bias[start:end,5], 'y-', label = 'msckf')
+        ax2[1][2].plot(msckf_bias[start:end,0], msckf_bias[start:end,6], 'y-', label = 'msckf')
     
     ax2[0, 0].set_title("acc_x(m^s-2)")
     ax2[0, 1].set_title("acc_y(m^s-2)")
@@ -166,7 +179,8 @@ def main():
     ax2[3, 0].set_title("bias_a(m^s-2)")
     ax2[3, 1].set_title("bias_w(rad/s)")
     
-    plt.legend()
+    lines, labels = fig2.axes[-1].get_legend_handles_labels()
+    fig2.legend(lines, labels, loc = 'upper right') # 图例的位置
     fig2.tight_layout()
     plt.savefig(save_bias_path, dpi=300)
     

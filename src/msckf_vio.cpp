@@ -669,20 +669,15 @@ void MsckfVio::estiImuBias(const double time){
     // Execute process model.
   }
 
-  ROS_INFO("CAM STATE SIZE: %d, OPTI FLOW: %f, %f, %f, SIZE: %d", state_server.cam_states.size(),
-    imu_state.opti_speed[0], imu_state.opti_speed[1], imu_state.opti_speed[2], speed_msg_buffer.size());
+  // ROS_INFO("CAM STATE SIZE: %d, OPTI FLOW: %f, %f, %f, SIZE: %d", state_server.cam_states.size(),
+  //   imu_state.opti_speed[0], imu_state.opti_speed[1], imu_state.opti_speed[2], speed_msg_buffer.size());
   
   if(window.size() < 5)
     return;
 
   // repropagate();
   ceres::Problem problem;
-  // double bias_a[3] = {imu_state.acc_bias[0], imu_state.acc_bias[1], imu_state.acc_bias[2]}; 
-  // double bias_a[3] = {-0.013337, 0.103464, 0.093086};
   double bias_a[3] = {0, 0, 0};
-
-  // double bias_w[3] = {imu_state.gyro_bias[0], imu_state.gyro_bias[1], imu_state.gyro_bias[2]};
-  // double bias_w[3] = {-0.002153, 0.020744, 0.075806};
   double bias_w[3] = {0, 0, 0};
 
   CamStateServer& cam_states = state_server.cam_states;
@@ -707,8 +702,9 @@ void MsckfVio::estiImuBias(const double time){
       std::vector<std::pair<double, Eigen::Vector3d>> acc_set = imu_state.m_acc_set;
       std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = imu_state.m_gyro_set;
 
-      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 6, 3, 3>(
-        new BiasError(state_server.imu_state.gyro_bias, prev_time, prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
+      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 9, 3, 3>(
+        new BiasError(state_server.imu_state.acc_bias, state_server.imu_state.gyro_bias, prev_time, 
+          prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
       problem.AddResidualBlock(cost_function, loss_function, bias_a, bias_w);  
 
     }else{      
@@ -717,15 +713,16 @@ void MsckfVio::estiImuBias(const double time){
       std::vector<std::pair<double, Eigen::Vector3d>> acc_set = next->m_acc_set;
       std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = next->m_gyro_set;
 
-      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 6, 3, 3>(
-        new BiasError(state_server.imu_state.gyro_bias, prev_time, prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
+      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 9, 3, 3>(
+        new BiasError(state_server.imu_state.acc_bias, state_server.imu_state.gyro_bias, prev_time, 
+          prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
       problem.AddResidualBlock(cost_function, loss_function, bias_a, bias_w);
     }
   }
 
   std::cout << "finish add residual block! " << std::endl;
   ceres::Solver::Options options;
-  options.minimizer_progress_to_stdout = true;
+  options.minimizer_progress_to_stdout = false;
   options.linear_solver_type = ceres::DENSE_SCHUR;
   // options.trust_region_strategy_type = ceres::DOGLEG;
   ceres::Solver::Summary summary;
@@ -744,7 +741,7 @@ void MsckfVio::estiImuBias(const double time){
   ROS_INFO("bias_a: %f, %f, %f, bias_w: %f, %f, %f", bias_a[0], bias_a[1], bias_a[2], 
     bias_w[0], bias_w[1], bias_w[2]);
   
-  repropagate();
+  // repropagate();
 
   return;
 }
@@ -1746,7 +1743,6 @@ void MsckfVio::onlineReset() {
 
 void MsckfVio::publish(const ros::Time& time) {
   
-
   // Convert the IMU frame to the body frame.
   const IMUState& imu_state = state_server.imu_state;
   Eigen::Isometry3d T_i_w = Eigen::Isometry3d::Identity();

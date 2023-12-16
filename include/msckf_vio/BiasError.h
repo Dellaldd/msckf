@@ -12,9 +12,9 @@ using namespace Eigen;
 namespace msckf_vio{
 class BiasError {
 public:
-    BiasError(Eigen::Vector3d gyro_bias, double prev_time, Eigen::Vector3d prev_acc, Eigen::Vector3d prev_gyro, Eigen::Vector3d speed_i, Eigen::Vector3d speed_j, std::vector<std::pair<double, Eigen::Vector3d>> acc_set,
+    BiasError(Eigen::Vector3d acc_bias, Eigen::Vector3d gyro_bias, double prev_time, Eigen::Vector3d prev_acc, Eigen::Vector3d prev_gyro, Eigen::Vector3d speed_i, Eigen::Vector3d speed_j, std::vector<std::pair<double, Eigen::Vector3d>> acc_set,
         std::vector<std::pair<double, Eigen::Vector3d>> gyro_set, Eigen::Quaterniond orien):
-        gyro_bias(gyro_bias), prev_time(prev_time), prev_acc(prev_acc), prev_gyro(prev_gyro), speed_i(speed_i), speed_j(speed_j), acc_set(acc_set), gyro_set(gyro_set), orien(orien){}
+        acc_bias(acc_bias), gyro_bias(gyro_bias), prev_time(prev_time), prev_acc(prev_acc), prev_gyro(prev_gyro), speed_i(speed_i), speed_j(speed_j), acc_set(acc_set), gyro_set(gyro_set), orien(orien){}
                                                                            
     template<typename T>
     bool operator()(const T *const ba, const T *const bw, T *residuals) const {
@@ -47,8 +47,8 @@ public:
 
             Eigen::Matrix<T, 3, 1> un_acc_g_0 = q * acc_no_bias0 + G;
             Eigen::Matrix<T, 3, 1> un_gyr = T(0.5) * (gyro_no_bias0 + gyro_no_bias) ;
-            q = q * Eigen::Quaternion<T>(T(1), un_gyr(0) * dt / T(2), un_gyr(1) * dt / T(2), un_gyr(2) * dt / T(2));
-            q.normalize();
+            // q = q * Eigen::Quaternion<T>(T(1), un_gyr(0) * dt / T(2), un_gyr(1) * dt / T(2), un_gyr(2) * dt / T(2));
+            // q.normalize();
             Eigen::Matrix<T, 3, 1> un_acc_g_1 = q * acc_no_bias + G; 
             Eigen::Matrix<T, 3, 1> un_acc_g = T(0.5) * (un_acc_g_0 + un_acc_g_1);
 
@@ -59,13 +59,25 @@ public:
         residuals[1] = ceres::abs(opti_speed[1] - vel[1]);
         residuals[2] = ceres::abs(opti_speed[2] - vel[2]);
 
-        residuals[3] = T(10) * ceres::abs(bw[0] - T(gyro_bias[0]));
-        residuals[4] = T(10) * ceres::abs(bw[1] - T(gyro_bias[1]));
-        residuals[5] = T(10) * ceres::abs(bw[2] - T(gyro_bias[2]));
+        // residuals[3] = T(100) * ceres::abs(bw[0] - T(gyro_bias[0]));
+        // residuals[4] = T(100) * ceres::abs(bw[1] - T(gyro_bias[1]));
+        // residuals[5] = T(100) * ceres::abs(bw[2] - T(gyro_bias[2]));
 
-        // residuals[3] = ceres::abs(bw[0] - T(gyro_bias[0]));
-        // residuals[4] = ceres::abs(bw[1] - T(gyro_bias[1]));
-        // residuals[5] = ceres::abs(bw[2] - T(gyro_bias[2]));
+        residuals[3] = ceres::abs(bw[0] - T(gyro_bias[0]));
+        residuals[4] = ceres::abs(bw[1] - T(gyro_bias[1]));
+        residuals[5] = ceres::abs(bw[2] - T(gyro_bias[2]));
+        
+        // residuals[6] = ceres::abs(bw[0] - T(gyro_bias[0]));
+        // residuals[7] = ceres::abs(bw[1] - T(gyro_bias[1]));
+        // residuals[8] = ceres::abs(bw[2] - T(gyro_bias[2]));
+
+        residuals[6] = T(0.1) * ceres::abs(ba[0] - T(acc_bias[0]));
+        residuals[7] = T(0.1) * ceres::abs(ba[1] - T(acc_bias[1]));
+        residuals[8] = T(0.1) * ceres::abs(ba[2] - T(acc_bias[2]));
+
+        // residuals[6] = ceres::abs(ba[0] - T(acc_bias[0]));
+        // residuals[7] = ceres::abs(ba[1] - T(acc_bias[1]));
+        // residuals[8] = ceres::abs(ba[2] - T(acc_bias[2]));
               
         return true;
     }
@@ -74,7 +86,7 @@ public:
 
 
 private:
-  Eigen::Vector3d gyro_bias;
+  Eigen::Vector3d gyro_bias, acc_bias;
   Eigen::Vector3d speed_i, speed_j, prev_acc, prev_gyro; 
   std::vector<std::pair<double, Eigen::Vector3d>> acc_set, gyro_set;
   Eigen::Quaterniond orien;
