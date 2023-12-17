@@ -132,6 +132,10 @@ class MsckfVio {
 
     void estiImuBias(const double time);
     
+    void optiflowProcess();
+
+    void OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::VectorXd&r,const Eigen::MatrixXd &noise);
+
     void repropagate();
     
     // Filter related functions

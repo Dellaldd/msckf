@@ -561,6 +561,8 @@ void MsckfVio::featureCallback(
       ros::Time::now()-start_time).toSec();
   // ROS_INFO("finish addFeatureObservations! ");
 
+  
+
   // Perform measurement update if necessary.
   start_time = ros::Time::now();
   removeLostFeatures();
@@ -579,6 +581,8 @@ void MsckfVio::featureCallback(
   publish(msg->header.stamp);
   double publish_time = (
       ros::Time::now()-start_time).toSec();
+  
+  optiflowProcess();
 
   // Reset the system if necessary.
   onlineReset();
@@ -605,6 +609,141 @@ void MsckfVio::featureCallback(
   }
 
   return;
+}
+
+void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::VectorXd&r,const Eigen::MatrixXd &noise)
+{
+  if (H.rows() == 0 || r.rows() == 0) return;
+
+  // Decompose the final Jacobian matrix to reduce computational
+  // complexity as in Equation (28), (29).
+  MatrixXd H_thin;
+  VectorXd r_thin;
+
+  
+  if (H.rows() > H.cols()) {
+      // Convert H to a sparse matrix.
+      SparseMatrix<double> H_sparse = H.sparseView();
+
+      // Perform QR decomposition on H_sparse.
+      SPQR<SparseMatrix<double> > spqr_helper;
+      spqr_helper.setSPQROrdering(SPQR_ORDERING_NATURAL);
+      spqr_helper.compute(H_sparse);
+
+      MatrixXd H_temp;
+      VectorXd r_temp;
+      (spqr_helper.matrixQ().transpose() * H).evalTo(H_temp);
+      (spqr_helper.matrixQ().transpose() * r).evalTo(r_temp);
+
+      H_thin = H_temp.topRows(21+state_server.cam_states.size()*6);
+      r_thin = r_temp.head(21+state_server.cam_states.size()*6);
+
+      //HouseholderQR<MatrixXd> qr_helper(H);
+      //MatrixXd Q = qr_helper.householderQ();
+      //MatrixXd Q1 = Q.leftCols(21+state_server.cam_states.size()*6);
+
+      //H_thin = Q1.transpose() * H;
+      //r_thin = Q1.transpose() * r;
+  } else {
+      H_thin = H;
+      r_thin = r;
+  }
+  // cout << H << endl;
+  // Compute the Kalman gain.
+  const MatrixXd& P = state_server.state_cov;
+  MatrixXd S = H_thin*P*H_thin.transpose() + noise;
+  //MatrixXd K_transpose = S.fullPivHouseholderQr().solve(H_thin*P);
+  MatrixXd K_transpose = S.ldlt().solve(H_thin*P);
+  MatrixXd K = K_transpose.transpose();
+
+  // Compute the error of the state.
+  VectorXd delta_x = K * r_thin;
+
+  // Update the IMU state.
+  const VectorXd& delta_x_imu = delta_x.head<21>();
+
+  if (//delta_x_imu.segment<3>(0).norm() > 0.15 ||
+          //delta_x_imu.segment<3>(3).norm() > 0.15 ||
+          delta_x_imu.segment<3>(6).norm() > 0.5 ||
+          //delta_x_imu.segment<3>(9).norm() > 0.5 ||
+          delta_x_imu.segment<3>(12).norm() > 1.0) {
+      printf("delta velocity: %f\n", delta_x_imu.segment<3>(6).norm());
+      printf("delta position: %f\n", delta_x_imu.segment<3>(12).norm());
+      ROS_WARN("Update change is too large.");
+      //return;
+  }
+
+  const Vector4d dq_imu =
+          smallAngleQuaternion(delta_x_imu.head<3>());
+  state_server.imu_state.orientation = quaternionMultiplication(
+              dq_imu, state_server.imu_state.orientation);
+  cout << "delta dq_imu: " << delta_x_imu.head<3>() << endl;
+
+  state_server.imu_state.gyro_bias += delta_x_imu.segment<3>(3);
+  cout << "delta gyro_bias: " << delta_x_imu.segment<3>(3) << endl;
+
+  state_server.imu_state.velocity += delta_x_imu.segment<3>(6);
+  cout << "delta velocity: " << delta_x_imu.segment<3>(6) << endl;
+
+  state_server.imu_state.acc_bias += delta_x_imu.segment<3>(9);
+  cout << "delta acc_bias: " << delta_x_imu.segment<3>(9) << endl;
+
+  state_server.imu_state.position += delta_x_imu.segment<3>(12);
+  cout << "delta position: " << delta_x_imu.segment<3>(12) << endl;
+
+  const Vector4d dq_extrinsic =
+          smallAngleQuaternion(delta_x_imu.segment<3>(15));
+  state_server.imu_state.R_imu_cam0 = quaternionToRotation(
+              dq_extrinsic) * state_server.imu_state.R_imu_cam0;
+  state_server.imu_state.t_cam0_imu += delta_x_imu.segment<3>(18);
+
+  // Update the camera states.
+  auto cam_state_iter = state_server.cam_states.begin();
+  for (int i = 0; i < state_server.cam_states.size();
+        ++i, ++cam_state_iter) {
+      const VectorXd& delta_x_cam = delta_x.segment<6>(21+i*6);
+      const Vector4d dq_cam = smallAngleQuaternion(delta_x_cam.head<3>());
+      cam_state_iter->second.orientation = quaternionMultiplication(
+                  dq_cam, cam_state_iter->second.orientation);
+      cam_state_iter->second.position += delta_x_cam.tail<3>();
+  }
+
+  // Update state covariance.
+  MatrixXd I_KH = MatrixXd::Identity(K.rows(), H_thin.cols()) - K*H_thin;
+  //state_server.state_cov = I_KH*state_server.state_cov*I_KH.transpose() +
+  //  K*K.transpose()*Feature::observation_noise;
+  state_server.state_cov = I_KH*state_server.state_cov;
+
+  // Fix the covariance to be symmetric
+  MatrixXd state_cov_fixed = (state_server.state_cov +
+                              state_server.state_cov.transpose()) / 2.0;
+  state_server.state_cov = state_cov_fixed;
+
+  return;
+}
+
+void MsckfVio::optiflowProcess(){
+  Eigen::MatrixXd H_x = MatrixXd::Zero(3,21+6*state_server.cam_states.size());
+  Eigen::VectorXd r = VectorXd::Zero(3);
+
+  IMUState imu_state = state_server.imu_state;
+  H_x.block<3,3>(0,6) = Eigen::Matrix3d::Identity();
+  // r = imu_state.velocity - imu_state.opti_speed;
+  r.segment<3>(0) = imu_state.opti_speed - imu_state.velocity;
+  cout << "r: " << r.transpose() << " velocity: " << imu_state.velocity.transpose()
+    << " opti_speed: " << imu_state.opti_speed.transpose() << endl;
+
+  // H_x.block<3,3>(3,12) = Eigen::Matrix3d::Identity();
+  // // r = imu_state.position - gt_poses[gt_num].p;
+  // r.segment<3>(3) = gt_poses[gt_num].p - imu_state.position;
+
+  // cout << "r: " << r.transpose() << " velocity: " << imu_state.position.transpose()
+  //   << " opti_speed: " << gt_poses[gt_num].p.transpose() << endl;
+
+  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
+
+  OptiflowmeasurementUpdate(H_x, r, noise);
+
 }
 
 void MsckfVio::estiImuBias(const double time){
@@ -648,98 +787,99 @@ void MsckfVio::estiImuBias(const double time){
   speed_msg_buffer.erase(speed_msg_buffer.begin(),
       speed_msg_buffer.begin()+used_msg);
 
-  imu_state.m_acc_set.clear();
-  imu_state.m_gyro_set.clear();
+  // OPTIMIZE
+  // imu_state.m_acc_set.clear();
+  // imu_state.m_gyro_set.clear();
 
-  for (const auto& imu_msg : imu_msg_buffer) {
-    double imu_time = imu_msg.header.stamp.toSec();
+  // for (const auto& imu_msg : imu_msg_buffer) {
+  //   double imu_time = imu_msg.header.stamp.toSec();
 
-    if (imu_time < time_bound) {
-      continue;
-    }
-    if (imu_time > time) break;
+  //   if (imu_time < time_bound) {
+  //     continue;
+  //   }
+  //   if (imu_time > time) break;
 
-    // Convert the msgs.
-    Vector3d m_gyro, m_acc;
-    tf::vectorMsgToEigen(imu_msg.linear_acceleration, m_acc);
-    tf::vectorMsgToEigen(imu_msg.angular_velocity, m_gyro);
+  //   // Convert the msgs.
+  //   Vector3d m_gyro, m_acc;
+  //   tf::vectorMsgToEigen(imu_msg.linear_acceleration, m_acc);
+  //   tf::vectorMsgToEigen(imu_msg.angular_velocity, m_gyro);
 
-    imu_state.m_acc_set.push_back(make_pair(imu_time, m_acc));
-    imu_state.m_gyro_set.push_back(make_pair(imu_time, m_gyro));
-    // Execute process model.
-  }
+  //   imu_state.m_acc_set.push_back(make_pair(imu_time, m_acc));
+  //   imu_state.m_gyro_set.push_back(make_pair(imu_time, m_gyro));
+  //   // Execute process model.
+  // }
 
-  // ROS_INFO("CAM STATE SIZE: %d, OPTI FLOW: %f, %f, %f, SIZE: %d", state_server.cam_states.size(),
-  //   imu_state.opti_speed[0], imu_state.opti_speed[1], imu_state.opti_speed[2], speed_msg_buffer.size());
+  // // ROS_INFO("CAM STATE SIZE: %d, OPTI FLOW: %f, %f, %f, SIZE: %d", state_server.cam_states.size(),
+  // //   imu_state.opti_speed[0], imu_state.opti_speed[1], imu_state.opti_speed[2], speed_msg_buffer.size());
   
-  if(window.size() < 5)
-    return;
+  // if(window.size() < 5)
+  //   return;
 
-  // repropagate();
-  ceres::Problem problem;
-  double bias_a[3] = {0, 0, 0};
-  double bias_w[3] = {0, 0, 0};
+  // // repropagate();
+  // ceres::Problem problem;
+  // double bias_a[3] = {0, 0, 0};
+  // double bias_w[3] = {0, 0, 0};
 
-  CamStateServer& cam_states = state_server.cam_states;
-  ceres::LossFunction *loss_function = new ceres::HuberLoss(0.5);  
+  // CamStateServer& cam_states = state_server.cam_states;
+  // ceres::LossFunction *loss_function = new ceres::HuberLoss(0.5);  
 
-  std::vector<IMUState>::iterator cam, next;
+  // std::vector<IMUState>::iterator cam, next;
 
-  for(cam = window.begin(); cam != window.end(); cam++){
+  // for(cam = window.begin(); cam != window.end(); cam++){
     
-    double prev_time = cam->time;
-    Eigen::Vector3d prev_acc = cam->m_acc_set.back().second;
-    Eigen::Vector3d prev_gyro = cam->m_gyro_set.back().second;
-    Eigen::Quaterniond orien = cam->imu_orientation;
-    orien.normalize();
+  //   double prev_time = cam->time;
+  //   Eigen::Vector3d prev_acc = cam->m_acc_set.back().second;
+  //   Eigen::Vector3d prev_gyro = cam->m_gyro_set.back().second;
+  //   Eigen::Quaterniond orien = cam->imu_orientation;
+  //   orien.normalize();
 
-    next = cam;
-    next ++;
+  //   next = cam;
+  //   next ++;
 
-    if(next == window.end()){
-      Eigen::Vector3d speed_i = cam->opti_speed;
-      Eigen::Vector3d speed_j = imu_state.opti_speed;
-      std::vector<std::pair<double, Eigen::Vector3d>> acc_set = imu_state.m_acc_set;
-      std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = imu_state.m_gyro_set;
+  //   if(next == window.end()){
+  //     Eigen::Vector3d speed_i = cam->opti_speed;
+  //     Eigen::Vector3d speed_j = imu_state.opti_speed;
+  //     std::vector<std::pair<double, Eigen::Vector3d>> acc_set = imu_state.m_acc_set;
+  //     std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = imu_state.m_gyro_set;
 
-      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 9, 3, 3>(
-        new BiasError(state_server.imu_state.acc_bias, state_server.imu_state.gyro_bias, prev_time, 
-          prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
-      problem.AddResidualBlock(cost_function, loss_function, bias_a, bias_w);  
+  //     ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 9, 3, 3>(
+  //       new BiasError(state_server.imu_state.acc_bias, state_server.imu_state.gyro_bias, prev_time, 
+  //         prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
+  //     problem.AddResidualBlock(cost_function, loss_function, bias_a, bias_w);  
 
-    }else{      
-      Eigen::Vector3d speed_i = cam->opti_speed;
-      Eigen::Vector3d speed_j = next->opti_speed;
-      std::vector<std::pair<double, Eigen::Vector3d>> acc_set = next->m_acc_set;
-      std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = next->m_gyro_set;
+  //   }else{      
+  //     Eigen::Vector3d speed_i = cam->opti_speed;
+  //     Eigen::Vector3d speed_j = next->opti_speed;
+  //     std::vector<std::pair<double, Eigen::Vector3d>> acc_set = next->m_acc_set;
+  //     std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = next->m_gyro_set;
 
-      ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 9, 3, 3>(
-        new BiasError(state_server.imu_state.acc_bias, state_server.imu_state.gyro_bias, prev_time, 
-          prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
-      problem.AddResidualBlock(cost_function, loss_function, bias_a, bias_w);
-    }
-  }
+  //     ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 9, 3, 3>(
+  //       new BiasError(state_server.imu_state.acc_bias, state_server.imu_state.gyro_bias, prev_time, 
+  //         prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
+  //     problem.AddResidualBlock(cost_function, loss_function, bias_a, bias_w);
+  //   }
+  // }
 
-  std::cout << "finish add residual block! " << std::endl;
-  ceres::Solver::Options options;
-  options.minimizer_progress_to_stdout = false;
-  options.linear_solver_type = ceres::DENSE_SCHUR;
-  // options.trust_region_strategy_type = ceres::DOGLEG;
-  ceres::Solver::Summary summary;
-  ceres::Solve(options, &problem, &summary);
-  imu_state.acc_bias[0] = bias_a[0];
-  imu_state.acc_bias[1] = bias_a[1];
-  imu_state.acc_bias[2] = bias_a[2];
+  // std::cout << "finish add residual block! " << std::endl;
+  // ceres::Solver::Options options;
+  // options.minimizer_progress_to_stdout = false;
+  // options.linear_solver_type = ceres::DENSE_SCHUR;
+  // // options.trust_region_strategy_type = ceres::DOGLEG;
+  // ceres::Solver::Summary summary;
+  // ceres::Solve(options, &problem, &summary);
+  // imu_state.acc_bias[0] = bias_a[0];
+  // imu_state.acc_bias[1] = bias_a[1];
+  // imu_state.acc_bias[2] = bias_a[2];
   
-  imu_state.gyro_bias[0] = bias_w[0];
-  imu_state.gyro_bias[1] = bias_w[1];
-  imu_state.gyro_bias[2] = bias_w[2];
+  // imu_state.gyro_bias[0] = bias_w[0];
+  // imu_state.gyro_bias[1] = bias_w[1];
+  // imu_state.gyro_bias[2] = bias_w[2];
   
-  opti_bias_acc = Eigen::Vector3d(bias_a[0], bias_a[1], bias_a[2]);
-  opti_bias_gyro = Eigen::Vector3d(bias_w[0], bias_w[1], bias_w[2]);
+  // opti_bias_acc = Eigen::Vector3d(bias_a[0], bias_a[1], bias_a[2]);
+  // opti_bias_gyro = Eigen::Vector3d(bias_w[0], bias_w[1], bias_w[2]);
 
-  ROS_INFO("bias_a: %f, %f, %f, bias_w: %f, %f, %f", bias_a[0], bias_a[1], bias_a[2], 
-    bias_w[0], bias_w[1], bias_w[2]);
+  // ROS_INFO("bias_a: %f, %f, %f, bias_w: %f, %f, %f", bias_a[0], bias_a[1], bias_a[2], 
+  //   bias_w[0], bias_w[1], bias_w[2]);
   
   // repropagate();
 
