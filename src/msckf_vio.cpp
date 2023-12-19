@@ -76,7 +76,7 @@ bool MsckfVio::loadParameters() {
   nh.param<string>("gt_type", gt_type, "euroc");
 
   // gravity
-  if(gt_type == "simulation"){
+  if(gt_type == "real"){
     IMUState::gravity = Vector3d(0, 0, -9.81);
   }else{
     IMUState::gravity = Vector3d(0, 0, -9.81);
@@ -130,7 +130,7 @@ bool MsckfVio::loadParameters() {
     
 
     // euroc v1
-    if(gt_type == "eurocv1"){
+    if(gt_type == "eurocv1" || gt_type == "real"){
       s_gt = " ";
       for(int i=1; i<lines_gt.size(); ++i){
           vec_gt = split_vec(lines_gt[i],s_gt);
@@ -351,103 +351,108 @@ void MsckfVio::optiflowCallback(const geometry_msgs::Vector3StampedConstPtr &msg
 
 void MsckfVio::imuCallback(
     const sensor_msgs::ImuConstPtr& msg) {
-  // ROS_INFO("receive imu!");
+
   // IMU msgs are pushed backed into a buffer instead of
   // being processed immediately. The IMU msgs are processed
   // when the next image is available, in which way, we can
   // easily handle the transfer delay.
-  // imu_msg_buffer.push_back(*msg);
-
-  // if (!is_gravity_set) {
-  //   if (imu_msg_buffer.size() < 200) return;
-  //   //if (imu_msg_buffer.size() < 10) return;
-  //   initializeGravityAndBias();
-  //   is_gravity_set = true;
-  // }
-
   imu_msg_buffer.push_back(*msg);
 
   if (!is_gravity_set) {
-  // if (imu_measurement.size() < 200) return;
+    if (imu_msg_buffer.size() < 200) return;
+    //if (imu_msg_buffer.size() < 10) return;
     initializeGravityAndBias(msg);
-  }
-  
-  if(msg->header.stamp.toSec() >= gt_poses[gt_num].time && !is_gt_time){
+    is_gravity_set = true;
     is_gt_time = true;
-    ROS_INFO("gt_num: %d, big gt_time: %f", gt_num, gt_poses[gt_num].time);
-    ROS_INFO("msg_time: %f", msg->header.stamp.toSec());
   }
+
+
+  // use gt 
+  // imu_msg_buffer.push_back(*msg);
+
+  // if (!is_gravity_set) {
+  // // if (imu_measurement.size() < 200) return;
+  //   initializeGravityAndBias(msg);
+  // }
+  
+  // if(msg->header.stamp.toSec() >= gt_poses[gt_num].time && !is_gt_time){
+  //   is_gt_time = true;
+  //   ROS_INFO("gt_num: %d, big gt_time: %f", gt_num, gt_poses[gt_num].time);
+  //   ROS_INFO("msg_time: %f", msg->header.stamp.toSec());
+  // }
   
   return;
 }
 
 void MsckfVio::initializeGravityAndBias(const sensor_msgs::ImuConstPtr& msg) {
 
-  // // Initialize gravity and gyro bias.
-  // Vector3d sum_angular_vel = Vector3d::Zero();
-  // Vector3d sum_linear_acc = Vector3d::Zero();
+  // Initialize gravity and gyro bias.
+  Vector3d sum_angular_vel = Vector3d::Zero();
+  Vector3d sum_linear_acc = Vector3d::Zero();
 
-  // for (const auto& imu_msg : imu_msg_buffer) {
-  //   Vector3d angular_vel = Vector3d::Zero();
-  //   Vector3d linear_acc = Vector3d::Zero();
+  for (const auto& imu_msg : imu_msg_buffer) {
+    Vector3d angular_vel = Vector3d::Zero();
+    Vector3d linear_acc = Vector3d::Zero();
 
-  //   tf::vectorMsgToEigen(imu_msg.angular_velocity, angular_vel);
-  //   tf::vectorMsgToEigen(imu_msg.linear_acceleration, linear_acc);
+    tf::vectorMsgToEigen(imu_msg.angular_velocity, angular_vel);
+    tf::vectorMsgToEigen(imu_msg.linear_acceleration, linear_acc);
 
-  //   sum_angular_vel += angular_vel;
-  //   sum_linear_acc += linear_acc;
+    sum_angular_vel += angular_vel;
+    sum_linear_acc += linear_acc;
+  }
+
+  state_server.imu_state.gyro_bias =
+    sum_angular_vel / imu_msg_buffer.size();
+  //IMUState::gravity =
+  //  -sum_linear_acc / imu_msg_buffer.size();
+  // This is the gravity in the IMU frame.
+  Vector3d gravity_imu =
+    sum_linear_acc / imu_msg_buffer.size();
+
+  // Initialize the initial orientation, so that the estimation
+  // is consistent with the inertial frame.
+  double gravity_norm = gravity_imu.norm();
+  IMUState::gravity = Vector3d(0.0, 0.0, -gravity_norm);
+
+  Quaterniond q0_i_w = Quaterniond::FromTwoVectors(
+    gravity_imu, -IMUState::gravity);
+  state_server.imu_state.orientation =
+    rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
+
+  return;
+
+  // use gt 
+  // double time = msg->header.stamp.toSec();
+  // if(gt_poses[gt_num].time > msg->header.stamp.toSec()){
+  //   // ROS_INFO("big gt_time: %f", gt_poses[gt_num].time);
+  //   // ROS_INFO("msg_time: %f", time);
+  //   return;
+  // }
+    
+  // while(gt_poses[gt_num].time < msg->header.stamp.toSec()){
+  //   // cout << "gt_num: " << gt_num << " time: " << msg->header.stamp.toSec() 
+  //   // << " gt_time: " << gt_poses[gt_num].time <<endl;
+  //   gt_num ++;
   // }
 
-  // state_server.imu_state.gyro_bias =
-  //   sum_angular_vel / imu_msg_buffer.size();
-  // //IMUState::gravity =
-  // //  -sum_linear_acc / imu_msg_buffer.size();
-  // // This is the gravity in the IMU frame.
-  // Vector3d gravity_imu =
-  //   sum_linear_acc / imu_msg_buffer.size();
+  // if(gt_num != 0)
+  //   gt_num --;
 
-  // // Initialize the initial orientation, so that the estimation
-  // // is consistent with the inertial frame.
-  // double gravity_norm = gravity_imu.norm();
-  // IMUState::gravity = Vector3d(0.0, 0.0, -gravity_norm);
+  // ROS_INFO("gt_num: %d, gt_time: %f, position: %f, %f, %f, quat: %f, %f, %f, %f",
+  //   gt_num, gt_poses[gt_num].time, gt_poses[gt_num].p[0], gt_poses[gt_num].p[1], gt_poses[gt_num].p[2],
+  //   gt_poses[gt_num].q.x(), gt_poses[gt_num].q.y(), gt_poses[gt_num].q.z(), gt_poses[gt_num].q.w());
 
-  // Quaterniond q0_i_w = Quaterniond::FromTwoVectors(
-  //   gravity_imu, -IMUState::gravity);
-  // state_server.imu_state.orientation =
-  //   rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
-
-  // return;
-
-  double time = msg->header.stamp.toSec();
-  if(gt_poses[gt_num].time > msg->header.stamp.toSec()){
-    ROS_INFO("big gt_time: %f", gt_poses[gt_num].time);
-    ROS_INFO("msg_time: %f", time);
-    return;
-  }
-    
-  while(gt_poses[gt_num].time < msg->header.stamp.toSec()){
-    // cout << "gt_num: " << gt_num << " time: " << msg->header.stamp.toSec() 
-    // << " gt_time: " << gt_poses[gt_num].time <<endl;
-    gt_num ++;
-  }
-
-  if(gt_num != 0)
-    gt_num --;
-
-  std::cout << "gt_num: " << gt_num << " gt_time: " << gt_poses[gt_num].time << " imu_time: " << time << " dtime: " << gt_poses[gt_num].time-time 
-  << " position: " << gt_poses[gt_num].p.transpose() << " velocity: " << gt_poses[gt_num].vel.transpose()<< std::endl;
-
-  gt_init = gt_num; 
+  // gt_init = gt_num; 
   
-  state_server.imu_state.time = gt_poses[gt_init].time;
-  std::cout << "gt_init: " << gt_init << std::endl;
-  std::cout << gt_poses[gt_init].p.transpose() << std::endl;
-  state_server.imu_state.orientation =
-    rotationToQuaternion(gt_poses[gt_init].q.toRotationMatrix().cast<double>().transpose()); //T_w_imu
-  state_server.imu_state.position = gt_poses[gt_init].p.cast<double>(); //p_imu_w
-  state_server.imu_state.velocity = gt_poses[gt_init].vel.cast<double>();
-  is_gravity_set = true;
-  return;
+  // state_server.imu_state.time = gt_poses[gt_init].time;
+  // std::cout << "gt_init: " << gt_init << std::endl;
+  // std::cout << gt_poses[gt_init].p.transpose() << std::endl;
+  // state_server.imu_state.orientation =
+  //   rotationToQuaternion(gt_poses[gt_init].q.toRotationMatrix().cast<double>().transpose()); //T_w_imu
+  // state_server.imu_state.position = gt_poses[gt_init].p.cast<double>(); //p_imu_w
+  // state_server.imu_state.velocity = gt_poses[gt_init].vel.cast<double>();
+  // is_gravity_set = true;
+  // return;
 }
 
 bool MsckfVio::resetCallback(
@@ -548,7 +553,7 @@ void MsckfVio::featureCallback(
   static int critical_time_cntr = 0;
   double processing_start_time = ros::Time::now().toSec();
 
-  estiImuBias(msg->header.stamp.toSec());
+  // estiImuBias(msg->header.stamp.toSec());
   // ROS_INFO("finish estiImuBias! ");
 
   // Propogate the IMU state.
@@ -588,7 +593,7 @@ void MsckfVio::featureCallback(
   double prune_cam_states_time = (
       ros::Time::now()-start_time).toSec();
   // ROS_INFO("finish pruneCamStateBuffer! ");
-  optiflowProcess();
+  // optiflowProcess();
   // Publish the odometry.
   start_time = ros::Time::now();
   publish(msg->header.stamp);
@@ -778,7 +783,6 @@ void MsckfVio::optiflowProcess(){
   IMUState &imu_state = state_server.imu_state;
   H_x.block<3,3>(0,6) = imu_state.R_imu_opti;// q bg v ba p
   H_x.block<3,3>(0,21) = -skewSymmetric(imu_state.R_imu_opti * imu_state.velocity);
-  // H_x.block<3,3>(0,24) = Eigen::Matrix3d::Identity();
 
   r.segment<3>(0) = imu_state.opti_speed - imu_state.velocity;
   Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
@@ -1050,7 +1054,7 @@ void MsckfVio::batchImuProcessing(const double& time_bound) {
   // Counter how many IMU msgs in the buffer are used.
   int used_imu_msg_cntr = 0;
   use_imu_num = 0;
-
+  // cout << "gravity: " << IMUState::gravity << endl;
   for (const auto& imu_msg : imu_msg_buffer) {
     double imu_time = imu_msg.header.stamp.toSec();
     if (imu_time < state_server.imu_state.time) {
@@ -1206,6 +1210,8 @@ void MsckfVio::predictNewState(const double& dt,
   // k1 = f(tn, yn)
   Vector3d k1_v_dot = quaternionToRotation(q).transpose()*acc +
     IMUState::gravity;
+  // cout << "k1_v_dot: " << k1_v_dot.transpose() << endl;
+
   Vector3d k1_p_dot = v;
 
   // k2 = f(tn+dt/2, yn+k1*dt/2)
@@ -1533,10 +1539,16 @@ void MsckfVio::measurementUpdate(
     smallAngleQuaternion(delta_x_imu.head<3>());
   state_server.imu_state.orientation = quaternionMultiplication(
       dq_imu, state_server.imu_state.orientation);
+
   state_server.imu_state.gyro_bias += delta_x_imu.segment<3>(3);
+  cout << "delta gyro_bias: " << delta_x_imu.segment<3>(3) << endl;
+
   state_server.imu_state.velocity += delta_x_imu.segment<3>(6);
   state_server.imu_state.acc_bias += delta_x_imu.segment<3>(9);
+  cout << "delta acc_bias: " << delta_x_imu.segment<3>(9) << endl;
+
   state_server.imu_state.position += delta_x_imu.segment<3>(12);
+  cout << "delta position: " << delta_x_imu.segment<3>(12) << endl;
 
   const Vector4d dq_extrinsic =
     smallAngleQuaternion(delta_x_imu.segment<3>(15));
@@ -1550,8 +1562,6 @@ void MsckfVio::measurementUpdate(
 
   state_server.imu_state.R_imu_opti = quaternionToRotation(
               dq_extrinsic_opti) * state_server.imu_state.R_imu_opti;
-  state_server.imu_state.t_imu_opti += delta_x_imu.segment<3>(24);
-  cout << "dt_extrinsic_opti: " << delta_x_imu.segment<3>(24) << endl;
 
   // Update the camera states.
   auto cam_state_iter = state_server.cam_states.begin();

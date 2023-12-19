@@ -8,7 +8,7 @@ import math
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_3/"
     gt_path = foldpath + "groundtruth_velocity.txt"
     opti_path = foldpath + "traj_estimate_velocity.txt"
     gt_vel = np.loadtxt(gt_path, delimiter=' ', skiprows=1)

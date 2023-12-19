@@ -22,7 +22,7 @@ def quaternion_to_euler(q, degree_mode=1):
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/v203/test/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_4/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  
@@ -30,7 +30,7 @@ def main():
     bias_path = foldpath + "bias.txt"
     msckf_bias_path = msckf_foldpath + "bias.txt"
     is_euroc = True
-    use_msckf = True
+    use_msckf = False
     
     save_position_path = foldpath + "position.png"
     save_bias_path = foldpath + "bias.png"
@@ -53,7 +53,7 @@ def main():
         euler = list(euler_from_quaternion(q))
         if(is_euroc):
             if euler[0] > 0:
-                    euler[0] -= np.pi
+                euler[0] -= np.pi
             else:
                 euler[0] += np.pi
                 
@@ -63,11 +63,13 @@ def main():
         q_gt = [gt[i,4], gt[i,5], gt[i,6], gt[i,7]]
         # euler_gt = R.from_quat(q_gt).as_euler("xyz", degrees=True)
         euler_gt = list(euler_from_quaternion(q_gt))
-        if(is_euroc):
-            if euler_gt[0] > 0:
-                    euler_gt[0] -= np.pi
-            else:
-                euler_gt[0] += np.pi
+        
+        # if(is_euroc):
+        #     if euler_gt[0] > 0:
+        #         euler_gt[0] -= np.pi
+        #     else:
+        #         euler_gt[0] += np.pi
+        
         eulers_gt.append(euler_gt)
         
         error_pos.append(np.array([gt[i,1]-esti[i,1], gt[i,2]-esti[i,2], gt[i,3]-esti[i,3]]))
@@ -81,17 +83,17 @@ def main():
     eulers = np.array(eulers)
     fig1, ax1 = plt.subplots(3, 3)
     
-    ax1[0][0].plot(esti[:end,0], esti[:end,1], 'b-', label = 'esti')
-    ax1[0][1].plot(esti[:end,0], esti[:end,2], 'b-', label = 'esti')
-    ax1[0][2].plot(esti[:end,0], esti[:end,3], 'b-', label = 'esti')
+    ax1[0][0].plot(esti[:end,0], esti[:end,1]-esti[0,1]+gt[0,1], 'b-', label = 'esti')
+    ax1[0][1].plot(esti[:end,0], esti[:end,2]-esti[0,2]+gt[0,2], 'b-', label = 'esti')
+    ax1[0][2].plot(esti[:end,0], esti[:end,3]-esti[0,3]+gt[0,3], 'b-', label = 'esti')
     
-    ax1[1][0].plot(esti[:end,0], eulers[:end,0], 'b-', label = 'esti')
-    ax1[1][1].plot(esti[:end,0], eulers[:end,1], 'b-', label = 'esti')
-    ax1[1][2].plot(esti[:end,0], eulers[:end,2], 'b-', label = 'esti')
+    ax1[1][0].plot(esti[:end,0], eulers[:end,0]-eulers[0,0]+eulers_gt[0,0], 'b-', label = 'esti')
+    ax1[1][1].plot(esti[:end,0], eulers[:end,1]-eulers[0,1]+eulers_gt[0,1], 'b-', label = 'esti')
+    ax1[1][2].plot(esti[:end,0], eulers[:end,2]-eulers[0,2]+eulers_gt[0,2], 'b-', label = 'esti')
     
-    ax1[2][0].plot(esti[:end,0], esti[:end,8], 'b-', label = 'esti')
-    ax1[2][1].plot(esti[:end,0], esti[:end,9], 'b-', label = 'esti')
-    ax1[2][2].plot(esti[:end,0], esti[:end,10], 'b-', label = 'esti')
+    ax1[2][0].plot(esti[:end,0], esti[:end,8]-esti[0,8]+gt[0,8], 'b-', label = 'esti')
+    ax1[2][1].plot(esti[:end,0], esti[:end,9]-esti[0,9]+gt[0,9], 'b-', label = 'esti')
+    ax1[2][2].plot(esti[:end,0], esti[:end,10]-esti[0,10]+gt[0,10], 'b-', label = 'esti')
     
     ax1[0][0].plot(gt[:end,0], gt[:end,1], 'r-', label = 'gt')
     ax1[0][1].plot(gt[:end,0], gt[:end,2], 'r-', label = 'gt')

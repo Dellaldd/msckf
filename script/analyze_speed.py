@@ -13,7 +13,7 @@ import threading
 
 class Logger:
     def __init__(self):
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_3/"
         self.f_gt_vel = open(self.fold + "groundtruth_velocity.txt", 'w')
         self.f_vel = open(self.fold + "traj_estimate_velocity.txt", 'w')
         
@@ -25,9 +25,9 @@ class Logger:
         self.prev_time = 0
         self.prev_z = 0
         
-        rospy.Subscriber("/vrpn_client_node/jiahao1/pose", PoseStamped, self.gt_Cb)
+        # rospy.Subscriber("/vrpn_client_node/jiahao1/pose", PoseStamped, self.gt_Cb)
         rospy.Subscriber("/mavros/vfr_hud", VFR_HUD, self.opti_Cb)
-        # rospy.Subscriber("/outer_velocity", TwistStamped, self.gt_Cb)
+        rospy.Subscriber("/outer_velocity", TwistStamped, self.gt_Cb)
         self.add_thread = threading.Thread(target = self.thread_job)
         self.add_thread.start()
 
