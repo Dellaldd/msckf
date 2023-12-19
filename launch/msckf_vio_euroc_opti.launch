@@ -52,6 +52,9 @@
       <param name="initial_covariance/extrinsic_rotation_cov" value="3.0462e-4"/>
       <param name="initial_covariance/extrinsic_translation_cov" value="2.5e-5"/>
 
+      <param name="initial_covariance/opti_extrinsic_rotation_cov" value="3.0462e-4"/>
+      <param name="initial_covariance/opti_extrinsic_translation_cov" value="2.5e-5"/>
+
       <remap from="~imu" to="/imu"/>
       <remap from="~features" to="/firefly_sbx/image_processor/features"/>
       <remap from="~optiflow" to="/speed"/>

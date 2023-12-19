@@ -220,7 +220,11 @@ bool MsckfVio::loadParameters() {
   nh.param<double>("initial_covariance/extrinsic_translation_cov",
       extrinsic_translation_cov, 1e-4);
 
-  state_server.state_cov = MatrixXd::Zero(21, 21);
+  double opti_extrinsic_rotation_cov;
+  nh.param<double>("initial_covariance/opti_extrinsic_rotation_cov",
+      opti_extrinsic_rotation_cov, 3.0462e-4);
+
+  state_server.state_cov = MatrixXd::Zero(24, 24);
   for (int i = 3; i < 6; ++i)
     state_server.state_cov(i, i) = gyro_bias_cov;
   for (int i = 6; i < 9; ++i)
@@ -231,6 +235,9 @@ bool MsckfVio::loadParameters() {
     state_server.state_cov(i, i) = extrinsic_rotation_cov;
   for (int i = 18; i < 21; ++i)
     state_server.state_cov(i, i) = extrinsic_translation_cov;
+  for (int i = 21; i < 24; ++i)
+    state_server.state_cov(i, i) = opti_extrinsic_rotation_cov;
+  
 
   // Transformation offsets between the frames involved.
   Isometry3d T_imu_cam0 = utils::getTransformEigen(nh, "cam0/T_cam_imu");
@@ -482,8 +489,12 @@ bool MsckfVio::resetCallback(
       extrinsic_rotation_cov, 3.0462e-4);
   nh.param<double>("initial_covariance/extrinsic_translation_cov",
       extrinsic_translation_cov, 1e-4);
+  
+  double opti_extrinsic_rotation_cov;
+  nh.param<double>("initial_covariance/opti_extrinsic_rotation_cov",
+      opti_extrinsic_rotation_cov, 3.0462e-4);
 
-  state_server.state_cov = MatrixXd::Zero(21, 21);
+  state_server.state_cov = MatrixXd::Zero(24, 24);
   for (int i = 3; i < 6; ++i)
     state_server.state_cov(i, i) = gyro_bias_cov;
   for (int i = 6; i < 9; ++i)
@@ -494,6 +505,8 @@ bool MsckfVio::resetCallback(
     state_server.state_cov(i, i) = extrinsic_rotation_cov;
   for (int i = 18; i < 21; ++i)
     state_server.state_cov(i, i) = extrinsic_translation_cov;
+  for (int i = 21; i < 24; ++i)
+    state_server.state_cov(i, i) = opti_extrinsic_rotation_cov;
 
   // Clear all exsiting features in the map.
   map_server.clear();
@@ -635,8 +648,8 @@ void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::V
       (spqr_helper.matrixQ().transpose() * H).evalTo(H_temp);
       (spqr_helper.matrixQ().transpose() * r).evalTo(r_temp);
 
-      H_thin = H_temp.topRows(21+state_server.cam_states.size()*6);
-      r_thin = r_temp.head(21+state_server.cam_states.size()*6);
+      H_thin = H_temp.topRows(24+state_server.cam_states.size()*6);
+      r_thin = r_temp.head(24+state_server.cam_states.size()*6);
 
       //HouseholderQR<MatrixXd> qr_helper(H);
       //MatrixXd Q = qr_helper.householderQ();
@@ -660,7 +673,7 @@ void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::V
   VectorXd delta_x = K * r_thin;
 
   // Update the IMU state.
-  const VectorXd& delta_x_imu = delta_x.head<21>();
+  const VectorXd& delta_x_imu = delta_x.head<24>();
 
   if (//delta_x_imu.segment<3>(0).norm() > 0.15 ||
           //delta_x_imu.segment<3>(3).norm() > 0.15 ||
@@ -693,15 +706,28 @@ void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::V
 
   const Vector4d dq_extrinsic =
           smallAngleQuaternion(delta_x_imu.segment<3>(15));
+  cout << "dq_extrinsic: " << delta_x_imu.segment<3>(15) << endl;
+
   state_server.imu_state.R_imu_cam0 = quaternionToRotation(
-              dq_extrinsic) * state_server.imu_state.R_imu_cam0;
+              dq_extrinsic) * state_server.imu_state.R_imu_cam0;  
   state_server.imu_state.t_cam0_imu += delta_x_imu.segment<3>(18);
+  cout << "dt_extrinsic: " << delta_x_imu.segment<3>(18) << endl;
+
+
+  const Vector4d dq_extrinsic_opti =
+          smallAngleQuaternion(delta_x_imu.segment<3>(21));
+  cout << "dq_extrinsic_opti: " << delta_x_imu.segment<3>(15) << endl;
+
+  state_server.imu_state.R_imu_opti = quaternionToRotation(
+              dq_extrinsic_opti) * state_server.imu_state.R_imu_opti;
+  state_server.imu_state.t_imu_opti += delta_x_imu.segment<3>(24);
+  cout << "dt_extrinsic_opti: " << delta_x_imu.segment<3>(24) << endl;
 
   // Update the camera states.
   auto cam_state_iter = state_server.cam_states.begin();
   for (int i = 0; i < state_server.cam_states.size();
         ++i, ++cam_state_iter) {
-      const VectorXd& delta_x_cam = delta_x.segment<6>(21+i*6);
+      const VectorXd& delta_x_cam = delta_x.segment<6>(24+i*6);
       const Vector4d dq_cam = smallAngleQuaternion(delta_x_cam.head<3>());
       cam_state_iter->second.orientation = quaternionMultiplication(
                   dq_cam, cam_state_iter->second.orientation);
@@ -746,11 +772,14 @@ void MsckfVio::optiflowProcess(){
   // H_x.block<3,3>(0,6) = H_.block<3,3>(0,6);// v
   // cout << H_x.block<3,15>(0,0) << endl;
 
-  Eigen::MatrixXd H_x = MatrixXd::Zero(3,21+6*state_server.cam_states.size());
+  Eigen::MatrixXd H_x = MatrixXd::Zero(3,24+6*state_server.cam_states.size());
   Eigen::VectorXd r = VectorXd::Zero(3);
 
   IMUState &imu_state = state_server.imu_state;
-  H_x.block<3,3>(0,6) = Eigen::Matrix3d::Identity();// q bg v ba p
+  H_x.block<3,3>(0,6) = imu_state.R_imu_opti;// q bg v ba p
+  H_x.block<3,3>(0,21) = -skewSymmetric(imu_state.R_imu_opti * imu_state.velocity);
+  // H_x.block<3,3>(0,24) = Eigen::Matrix3d::Identity();
+
   r.segment<3>(0) = imu_state.opti_speed - imu_state.velocity;
   Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
 
@@ -1062,8 +1091,8 @@ void MsckfVio::processModel(const double& time,
   double dtime = time - imu_state.time;
 
   // Compute discrete transition and noise covariance matrix
-  Matrix<double, 21, 21> F = Matrix<double, 21, 21>::Zero();
-  Matrix<double, 21, 12> G = Matrix<double, 21, 12>::Zero();
+  Matrix<double, 24, 24> F = Matrix<double, 24, 24>::Zero();
+  Matrix<double, 24, 12> G = Matrix<double, 24, 12>::Zero();
 
   F.block<3, 3>(0, 0) = -skewSymmetric(gyro);
   F.block<3, 3>(0, 3) = -Matrix3d::Identity();
@@ -1082,10 +1111,10 @@ void MsckfVio::processModel(const double& time,
   // Approximate matrix exponential to the 3rd order,
   // which can be considered to be accurate enough assuming
   // dtime is within 0.01s.
-  Matrix<double, 21, 21> Fdt = F * dtime;
-  Matrix<double, 21, 21> Fdt_square = Fdt * Fdt;
-  Matrix<double, 21, 21> Fdt_cube = Fdt_square * Fdt;
-  Matrix<double, 21, 21> Phi = Matrix<double, 21, 21>::Identity() +
+  Matrix<double, 24, 24> Fdt = F * dtime;
+  Matrix<double, 24, 24> Fdt_square = Fdt * Fdt;
+  Matrix<double, 24, 24> Fdt_cube = Fdt_square * Fdt;
+  Matrix<double, 24, 24> Phi = Matrix<double, 24, 24>::Identity() +
     Fdt + 0.5*Fdt_square + (1.0/6.0)*Fdt_cube;
 
   // Propogate the state using 4th order Runge-Kutta
@@ -1111,20 +1140,20 @@ void MsckfVio::processModel(const double& time,
   Phi.block<3, 3>(12, 0) = A2 - (A2*u-w2)*s;
 
   // Propogate the state covariance matrix.
-  Matrix<double, 21, 21> Q = Phi*G*state_server.continuous_noise_cov*
+  Matrix<double, 24, 24> Q = Phi*G*state_server.continuous_noise_cov*
     G.transpose()*Phi.transpose()*dtime;
-  state_server.state_cov.block<21, 21>(0, 0) =
-    Phi*state_server.state_cov.block<21, 21>(0, 0)*Phi.transpose() + Q;
+  state_server.state_cov.block<24, 24>(0, 0) =
+    Phi*state_server.state_cov.block<24, 24>(0, 0)*Phi.transpose() + Q;
 
   if (state_server.cam_states.size() > 0) {
     state_server.state_cov.block(
-        0, 21, 21, state_server.state_cov.cols()-21) =
+        0, 24, 24, state_server.state_cov.cols()-24) =
       Phi * state_server.state_cov.block(
-        0, 21, 21, state_server.state_cov.cols()-21);
+        0, 24, 24, state_server.state_cov.cols()-24);
     state_server.state_cov.block(
-        21, 0, state_server.state_cov.rows()-21, 21) =
+        24, 0, state_server.state_cov.rows()-24, 24) =
       state_server.state_cov.block(
-        21, 0, state_server.state_cov.rows()-21, 21) * Phi.transpose();
+        24, 0, state_server.state_cov.rows()-24, 24) * Phi.transpose();
   }
 
   MatrixXd state_cov_fixed = (state_server.state_cov +
@@ -1241,7 +1270,7 @@ void MsckfVio::stateAugmentation(const double& time) {
   // To simplify computation, the matrix J below is the nontrivial block
   // in Equation (16) in "A Multi-State Constraint Kalman Filter for Vision
   // -aided Inertial Navigation".
-  Matrix<double, 6, 21> J = Matrix<double, 6, 21>::Zero();
+  Matrix<double, 6, 24> J = Matrix<double, 6, 24>::Zero();
   J.block<3, 3>(0, 0) = R_i_c;
   J.block<3, 3>(0, 15) = Matrix3d::Identity();
   J.block<3, 3>(3, 0) = skewSymmetric(R_w_i.transpose()*t_c_i);
@@ -1255,10 +1284,10 @@ void MsckfVio::stateAugmentation(const double& time) {
   state_server.state_cov.conservativeResize(old_rows+6, old_cols+6);
 
   // Rename some matrix blocks for convenience.
-  const Matrix<double, 21, 21>& P11 =
-    state_server.state_cov.block<21, 21>(0, 0);
+  const Matrix<double, 24, 24>& P11 =
+    state_server.state_cov.block<24, 24>(0, 0);
   const MatrixXd& P12 =
-    state_server.state_cov.block(0, 21, 21, old_cols-21);
+    state_server.state_cov.block(0, 24, 24, old_cols-24);
 
   // Fill in the augmented state covariance.
   state_server.state_cov.block(old_rows, 0, 6, old_cols) << J*P11, J*P12;
@@ -1401,7 +1430,7 @@ void MsckfVio::featureJacobian(
   jacobian_row_size = 4 * valid_cam_state_ids.size();
 
   MatrixXd H_xj = MatrixXd::Zero(jacobian_row_size,
-      21+state_server.cam_states.size()*6);
+      24+state_server.cam_states.size()*6);
   MatrixXd H_fj = MatrixXd::Zero(jacobian_row_size, 3);
   VectorXd r_j = VectorXd::Zero(jacobian_row_size);
   int stack_cntr = 0;
@@ -1418,7 +1447,7 @@ void MsckfVio::featureJacobian(
         state_server.cam_states.begin(), cam_state_iter);
 
     // Stack the Jacobians.
-    H_xj.block<4, 6>(stack_cntr, 21+6*cam_state_cntr) = H_xi;
+    H_xj.block<4, 6>(stack_cntr, 24+6*cam_state_cntr) = H_xi;
     H_fj.block<4, 3>(stack_cntr, 0) = H_fi;
     r_j.segment<4>(stack_cntr) = r_i;
     stack_cntr += 4;
@@ -1460,8 +1489,8 @@ void MsckfVio::measurementUpdate(
     (spqr_helper.matrixQ().transpose() * H).evalTo(H_temp);
     (spqr_helper.matrixQ().transpose() * r).evalTo(r_temp);
 
-    H_thin = H_temp.topRows(21+state_server.cam_states.size()*6);
-    r_thin = r_temp.head(21+state_server.cam_states.size()*6);
+    H_thin = H_temp.topRows(24+state_server.cam_states.size()*6);
+    r_thin = r_temp.head(24+state_server.cam_states.size()*6);
 
     //HouseholderQR<MatrixXd> qr_helper(H);
     //MatrixXd Q = qr_helper.householderQ();
@@ -1487,7 +1516,7 @@ void MsckfVio::measurementUpdate(
   VectorXd delta_x = K * r_thin;
 
   // Update the IMU state.
-  const VectorXd& delta_x_imu = delta_x.head<21>();
+  const VectorXd& delta_x_imu = delta_x.head<24>();
 
   if (//delta_x_imu.segment<3>(0).norm() > 0.15 ||
       //delta_x_imu.segment<3>(3).norm() > 0.15 ||
@@ -1515,11 +1544,20 @@ void MsckfVio::measurementUpdate(
       dq_extrinsic) * state_server.imu_state.R_imu_cam0;
   state_server.imu_state.t_cam0_imu += delta_x_imu.segment<3>(18);
 
+  const Vector4d dq_extrinsic_opti =
+          smallAngleQuaternion(delta_x_imu.segment<3>(21));
+  cout << "dq_extrinsic_opti: " << delta_x_imu.segment<3>(15) << endl;
+
+  state_server.imu_state.R_imu_opti = quaternionToRotation(
+              dq_extrinsic_opti) * state_server.imu_state.R_imu_opti;
+  state_server.imu_state.t_imu_opti += delta_x_imu.segment<3>(24);
+  cout << "dt_extrinsic_opti: " << delta_x_imu.segment<3>(24) << endl;
+
   // Update the camera states.
   auto cam_state_iter = state_server.cam_states.begin();
   for (int i = 0; i < state_server.cam_states.size();
       ++i, ++cam_state_iter) {
-    const VectorXd& delta_x_cam = delta_x.segment<6>(21+i*6);
+    const VectorXd& delta_x_cam = delta_x.segment<6>(24+i*6);
     const Vector4d dq_cam = smallAngleQuaternion(delta_x_cam.head<3>());
     cam_state_iter->second.orientation = quaternionMultiplication(
         dq_cam, cam_state_iter->second.orientation);
@@ -1612,7 +1650,7 @@ void MsckfVio::removeLostFeatures() {
   if (processed_feature_ids.size() == 0) return;
 
   MatrixXd H_x = MatrixXd::Zero(jacobian_row_size,
-      21+6*state_server.cam_states.size());
+      24+6*state_server.cam_states.size());
   VectorXd r = VectorXd::Zero(jacobian_row_size);
   int stack_cntr = 0;
 
@@ -1756,7 +1794,7 @@ void MsckfVio::pruneCamStateBuffer() {
 
   // Compute the Jacobian and residual.
   MatrixXd H_x = MatrixXd::Zero(jacobian_row_size,
-      21+6*state_server.cam_states.size());
+      24+6*state_server.cam_states.size());
   VectorXd r = VectorXd::Zero(jacobian_row_size);
   int stack_cntr = 0;
 
@@ -1796,7 +1834,7 @@ void MsckfVio::pruneCamStateBuffer() {
   for (const auto& cam_id : rm_cam_state_ids) {
     int cam_sequence = std::distance(state_server.cam_states.begin(),
         state_server.cam_states.find(cam_id));
-    int cam_state_start = 21 + 6*cam_sequence;
+    int cam_state_start = 24 + 6*cam_sequence;
     int cam_state_end = cam_state_start + 6;
 
     // Remove the corresponding rows and columns in the state
@@ -1894,8 +1932,12 @@ void MsckfVio::onlineReset() {
       extrinsic_rotation_cov, 3.0462e-4);
   nh.param<double>("initial_covariance/extrinsic_translation_cov",
       extrinsic_translation_cov, 1e-4);
+  
+  double opti_extrinsic_rotation_cov;
+  nh.param<double>("initial_covariance/opti_extrinsic_rotation_cov",
+      opti_extrinsic_rotation_cov, 3.0462e-4);
 
-  state_server.state_cov = MatrixXd::Zero(21, 21);
+  state_server.state_cov = MatrixXd::Zero(24, 24);
   for (int i = 3; i < 6; ++i)
     state_server.state_cov(i, i) = gyro_bias_cov;
   for (int i = 6; i < 9; ++i)
@@ -1906,7 +1948,8 @@ void MsckfVio::onlineReset() {
     state_server.state_cov(i, i) = extrinsic_rotation_cov;
   for (int i = 18; i < 21; ++i)
     state_server.state_cov(i, i) = extrinsic_translation_cov;
-
+  for (int i = 21; i < 24; ++i)
+    state_server.state_cov(i, i) = opti_extrinsic_rotation_cov;
   ROS_WARN("%lld online reset complete...", online_reset_counter);
   return;
 }
