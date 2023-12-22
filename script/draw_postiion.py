@@ -22,7 +22,7 @@ def quaternion_to_euler(q, degree_mode=1):
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/test/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/mh05/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  
@@ -96,9 +96,9 @@ def main():
     ax1[1][1].plot(esti[:end,0], eulers[:end,1]-eulers[0,1]+eulers_gt[0,1], 'b-', label = 'esti')
     ax1[1][2].plot(esti[:end,0], eulers[:end,2]-eulers[0,2]+eulers_gt[0,2], 'b-', label = 'esti')
     
-    ax1[2][0].plot(esti[:end,0], esti[:end,8], 'b-', label = 'esti')
-    ax1[2][1].plot(esti[:end,0], esti[:end,9], 'b-', label = 'esti')
-    ax1[2][2].plot(esti[:end,0], esti[:end,10], 'b-', label = 'esti')
+    # ax1[2][0].plot(esti[:end,0], esti[:end,8], 'b-', label = 'esti')
+    # ax1[2][1].plot(esti[:end,0], esti[:end,9], 'b-', label = 'esti')
+    # ax1[2][2].plot(esti[:end,0], esti[:end,10], 'b-', label = 'esti')
     
     
     

@@ -16,8 +16,7 @@ class Logger:
         self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_12_22_4/"
         self.f_gt = open(self.fold + "gt.txt", 'w')
         
-        self.gt = []
-        
+        self.gt = []      
         
         rospy.Subscriber("/vrpn_client_node/jiahao1/pose", PoseStamped, self.gt_Cb)
         self.add_thread = threading.Thread(target = self.thread_job)

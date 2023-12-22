@@ -57,7 +57,7 @@
 
       <remap from="~imu" to="/imu"/>
       <remap from="~features" to="/firefly_sbx/image_processor/features"/>
-      <remap from="~optiflow" to="/speed"/>
+      <remap from="~optiflow" to="/speed1"/>
 
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v101/gt.txt"/>
       <param name="gt_type" value="euroc"/> -->
@@ -85,6 +85,8 @@
 
       <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/mh05/gt.txt"/>
       <param name="gt_type" value="euroc"/> 
+      <param name="use_gt_initial" value="true"/>
+      
 
     </node>
   </group>

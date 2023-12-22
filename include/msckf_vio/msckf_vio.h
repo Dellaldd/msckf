@@ -254,7 +254,7 @@ class MsckfVio {
     Eigen::Isometry3d mocap_initial_frame;
 
     Eigen::Vector3d prev_speed;
-    bool is_first_opti = true;
+    bool is_first_opti = true, use_gt_initial;
     std::string gt_path, gt_type;
     double prev_time, prev_pz;
     std::vector<Gt> gt_poses;
