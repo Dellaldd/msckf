@@ -13,7 +13,7 @@ from msckf_vio.msg import BiasEstiInfo
 
 class Logger:
     def __init__(self):
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_4/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_12_22_4/"
         self.f_gt = open(self.fold + "stamped_groundtruth.txt", 'w')
         self.f_gt_vel = open(self.fold + "groundtruth_velocity.txt", 'w')
         self.f_esti = open(self.fold + "stamped_traj_estimate.txt", 'w')
@@ -72,7 +72,7 @@ class Logger:
         
         self.f_gt_vel.write("# timestamp tx ty tz qx qy qz qw vx vy vz")
         self.f_gt_vel.write('\r\n')
-        self.f_esti_vel.write("# timestamp tx ty tz qx qy qz qw vx vy vz")
+        self.f_esti_vel.write("# timestamp tx ty tz qx qy qz qw vx vy vz vx vy vz")
         self.f_esti_vel.write('\r\n')
         
         self.f_bias.write("time bias_acc_x bias_acc_y bias_acc_z bias_gyro_x bias_gyro_u bias_gyro_z use_imu_num imu_dataset_size imu_measure_id")
@@ -103,7 +103,8 @@ class Logger:
             str(msg.pose.pose.position.z), str(msg.pose.pose.orientation.x), 
             str(msg.pose.pose.orientation.y),str(msg.pose.pose.orientation.z), 
             str(msg.pose.pose.orientation.w), str(msg.twist.twist.linear.x), str(msg.twist.twist.linear.y),
-            str(msg.twist.twist.linear.z)])
+            str(msg.twist.twist.linear.z), str(msg.twist.twist.angular.x), str(msg.twist.twist.angular.y),
+            str(msg.twist.twist.angular.z)])
             
 def main():
     print("start record!")

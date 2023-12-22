@@ -19,6 +19,7 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Vector3Stamped.h>
+#include <mavros_msgs/VFR_HUD.h>
 #include <nav_msgs/Odometry.h>
 #include <tf/transform_broadcaster.h>
 #include <std_srvs/Trigger.h>
@@ -99,7 +100,7 @@ class MsckfVio {
      */
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
     
-    void optiflowCallback(const geometry_msgs::Vector3StampedConstPtr& msg);
+    void optiflowCallback(const mavros_msgs::VFR_HUDConstPtr& msg);
     /*
      * @brief featureCallback
      *    Callback function for feature measurements.
@@ -252,8 +253,10 @@ class MsckfVio {
     geometry_msgs::TransformStamped raw_mocap_odom_msg;
     Eigen::Isometry3d mocap_initial_frame;
 
+    Eigen::Vector3d prev_speed;
+    bool is_first_opti = true;
     std::string gt_path, gt_type;
-
+    double prev_time, prev_pz;
     std::vector<Gt> gt_poses;
     int gt_num = 0, gt_init = 0;
 };

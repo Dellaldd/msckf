@@ -343,10 +343,23 @@ bool MsckfVio::initialize() {
   return true;
 }
 
-void MsckfVio::optiflowCallback(const geometry_msgs::Vector3StampedConstPtr &msg){
-  Eigen::Vector3d speed = Eigen::Vector3d(msg->vector.x, msg->vector.y, msg->vector.z);
+void MsckfVio::optiflowCallback(const mavros_msgs::VFR_HUDConstPtr &msg){
   double time = msg->header.stamp.toSec();
-  speed_msg_buffer.push_back(make_pair(time, speed));
+  double curr_pz = msg->climb/1000;
+  if(!is_first_opti){
+    double speed_y = msg->airspeed/1000/0.02;
+    double speed_x = msg->groundspeed/1000/0.02;
+    double speed_z = (curr_pz - prev_pz)/(time - prev_time);
+    
+    Eigen::Vector3d speed = Eigen::Vector3d(speed_x, speed_y, speed_z);
+    if(speed_z == 0)
+      speed = prev_speed;
+    prev_speed = speed;
+    speed_msg_buffer.push_back(make_pair(time, speed));
+  }
+  prev_pz = curr_pz;
+  prev_time = time;
+  is_first_opti = false;
 }
 
 void MsckfVio::imuCallback(
@@ -356,6 +369,7 @@ void MsckfVio::imuCallback(
   // being processed immediately. The IMU msgs are processed
   // when the next image is available, in which way, we can
   // easily handle the transfer delay.
+
   imu_msg_buffer.push_back(*msg);
 
   if (!is_gravity_set) {
@@ -416,8 +430,48 @@ void MsckfVio::initializeGravityAndBias(const sensor_msgs::ImuConstPtr& msg) {
 
   Quaterniond q0_i_w = Quaterniond::FromTwoVectors(
     gravity_imu, -IMUState::gravity);
+
+
   state_server.imu_state.orientation =
     rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
+
+  // Eigen::Quaterniond q(Eigen::Vector4d(0, -1, 0, 0));
+  // state_server.imu_state.orientation = rotationToQuaternion(q.toRotationMatrix().transpose());
+
+  // double time = msg->header.stamp.toSec();
+  // if(gt_poses[gt_num].time > msg->header.stamp.toSec()){
+  //   // ROS_INFO("big gt_time: %f", gt_poses[gt_num].time);
+  //   // ROS_INFO("msg_time: %f", time);
+  //   return;
+  // }
+    
+  // while(gt_poses[gt_num].time < msg->header.stamp.toSec()){
+  //   // cout << "gt_num: " << gt_num << " time: " << msg->header.stamp.toSec() 
+  //   // << " gt_time: " << gt_poses[gt_num].time <<endl;
+  //   gt_num ++;
+  // }
+
+  // if(gt_num != 0)
+  //   gt_num --;
+
+  // ROS_INFO("gt_num: %d, gt_time: %f, position: %f, %f, %f, quat: %f, %f, %f, %f",
+  //   gt_num, gt_poses[gt_num].time, gt_poses[gt_num].p[0], gt_poses[gt_num].p[1], gt_poses[gt_num].p[2],
+  //   gt_poses[gt_num].q.x(), gt_poses[gt_num].q.y(), gt_poses[gt_num].q.z(), gt_poses[gt_num].q.w());
+
+  // gt_init = gt_num; 
+  // Eigen::Isometry3d T_imu_enu = Eigen::Isometry3d::Identity();
+  // T_imu_enu.linear() = q0_i_w.toRotationMatrix();
+
+  // Eigen::Isometry3d T_enu_w = Eigen::Isometry3d::Identity();
+  // T_enu_w.linear() = gt_poses[gt_init].q.toRotationMatrix();
+  // T_enu_w.translation() = gt_poses[gt_init].p;
+
+  // Eigen::Isometry3d T_imu_w = Eigen::Isometry3d::Identity();
+  // T_imu_w = T_imu_enu * T_enu_w;
+  
+  // state_server.imu_state.orientation =
+  //   rotationToQuaternion(T_imu_w.linear().transpose());
+  // state_server.imu_state.position = T_imu_w.translation();
 
   return;
 
@@ -553,7 +607,7 @@ void MsckfVio::featureCallback(
   static int critical_time_cntr = 0;
   double processing_start_time = ros::Time::now().toSec();
 
-  // estiImuBias(msg->header.stamp.toSec());
+  estiImuBias(msg->header.stamp.toSec());
   // ROS_INFO("finish estiImuBias! ");
 
   // Propogate the IMU state.
@@ -578,9 +632,7 @@ void MsckfVio::featureCallback(
   double add_observations_time = (
       ros::Time::now()-start_time).toSec();
   // ROS_INFO("finish addFeatureObservations! ");
-
-  
-
+  optiflowProcess();
   // Perform measurement update if necessary.
   start_time = ros::Time::now();
   removeLostFeatures();
@@ -593,14 +645,12 @@ void MsckfVio::featureCallback(
   double prune_cam_states_time = (
       ros::Time::now()-start_time).toSec();
   // ROS_INFO("finish pruneCamStateBuffer! ");
-  // optiflowProcess();
+  
   // Publish the odometry.
   start_time = ros::Time::now();
   publish(msg->header.stamp);
   double publish_time = (
-      ros::Time::now()-start_time).toSec();
-  
-  
+      ros::Time::now()-start_time).toSec(); 
 
   // Reset the system if necessary.
   onlineReset();
@@ -725,8 +775,6 @@ void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::V
 
   state_server.imu_state.R_imu_opti = quaternionToRotation(
               dq_extrinsic_opti) * state_server.imu_state.R_imu_opti;
-  state_server.imu_state.t_imu_opti += delta_x_imu.segment<3>(24);
-  cout << "dt_extrinsic_opti: " << delta_x_imu.segment<3>(24) << endl;
 
   // Update the camera states.
   auto cam_state_iter = state_server.cam_states.begin();
@@ -753,57 +801,48 @@ void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::V
   return;
 }
 
-void MsckfVio::optiflowProcess(){
-
-  // Eigen::MatrixXd H_x = MatrixXd::Zero(3,21+6*state_server.cam_states.size());
-  // Eigen::VectorXd r = VectorXd::Zero(3);
-
-  // IMUState &imu_state = state_server.imu_state;
-  // H_x.block<3,3>(0,6) = Eigen::Matrix3d::Identity();// q bg v ba p
-  // r.segment<3>(0) = imu_state.opti_speed - imu_state.velocity;
-  // Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
-
-  // Eigen::MatrixXd H = MatrixXd::Zero(3,9); // q, p ,v
-  // H.block<3,3>(0,6) = Eigen::Matrix3d::Identity();
-  // Eigen::VectorXd u = VectorXd::Zero(9);
-  // u.block<3, 1>(0, 0) = quaternionToRotation(imu_state.orientation_null) * IMUState::gravity;
-  // u.block<3, 1>(3, 0) = -skewSymmetric(imu_state.position_null) * IMUState::gravity;
-  // u.block<3, 1>(6, 0) = -skewSymmetric(imu_state.velocity_null) * IMUState::gravity;
-
-  // Eigen::MatrixXd H_ = H - H*u*(u.transpose()*u).inverse()*u.transpose();
-
-  // H_x.block<3,3>(0,0) = H_.block<3,3>(0,0); // q
-  // H_x.block<3,3>(0,12) = H_.block<3,3>(0,3); // p
-  // H_x.block<3,3>(0,6) = H_.block<3,3>(0,6);// v
-  // cout << H_x.block<3,15>(0,0) << endl;
+void MsckfVio::optiflowProcess(){  
 
   Eigen::MatrixXd H_x = MatrixXd::Zero(3,24+6*state_server.cam_states.size());
   Eigen::VectorXd r = VectorXd::Zero(3);
 
   IMUState &imu_state = state_server.imu_state;
+
+  Eigen::Vector3d vel;
+  int num = gt_num;
+  while(num < gt_poses.size()){
+    if (gt_poses[num].time <= state_server.imu_state.time){
+        num ++;
+    }else{
+        break;
+    }
+  }
+
+  if(num > 0){
+    
+    int prev_num = num - 1;
+    int next_num = num;
+    double prev_time = gt_poses[prev_num].time;
+    double curr_time = gt_poses[next_num].time;
+    while(curr_time - prev_time < 1e-2 && prev_num > 0){
+      prev_num--;
+      prev_time = gt_poses[prev_num].time;
+    }
+    cout << "next_num - prev_num: " << next_num - prev_num << endl;
+    Eigen::Vector3d prev_p = gt_poses[prev_num].p;
+    Eigen::Vector3d curr_p = gt_poses[next_num].p;
+    vel = (curr_p - prev_p) / (curr_time - prev_time);
+  }
+  imu_state.opti_speed = vel;
+
   H_x.block<3,3>(0,6) = imu_state.R_imu_opti;// q bg v ba p
   H_x.block<3,3>(0,21) = -skewSymmetric(imu_state.R_imu_opti * imu_state.velocity);
 
   r.segment<3>(0) = imu_state.opti_speed - imu_state.velocity;
-  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
+  cout << "r: " << r.transpose() << " opti: " << imu_state.opti_speed.transpose() 
+    << " vel: " << imu_state.velocity.transpose() << endl;
 
-  // Eigen::MatrixXd H = MatrixXd::Zero(3,21+6*state_server.cam_states.size()); // q, p ,v
-  // H.block<3,3>(0,6) = Eigen::Matrix3d::Identity();
-
-  // Eigen::VectorXd u = VectorXd::Zero(21+6*state_server.cam_states.size());
-  // u.block<3, 1>(0, 0) = quaternionToRotation(imu_state.orientation_null) * IMUState::gravity;
-  // u.block<3, 1>(6, 0) = -skewSymmetric(imu_state.velocity_null) * IMUState::gravity;
-  // u.block<3, 1>(12, 0) = -skewSymmetric(imu_state.position_null) * IMUState::gravity;
-  
-  // auto cam_state_iter = state_server.cam_states.begin();
-  // for (int i = 0; i < state_server.cam_states.size(); ++i, ++cam_state_iter) {
-  //   u.block<3, 1>(21 + i * 6,0) = quaternionToRotation(cam_state_iter->second.orientation_null) * IMUState::gravity;
-  //   u.block<3, 1>(24 + i * 6,0) = -skewSymmetric(cam_state_iter->second.position_null) * IMUState::gravity;
-  // }
-
-  // Eigen::MatrixXd H_ = H - H*u*(u.transpose()*u).inverse()*u.transpose();
-  // H_x = H_;
-  // cout << H_x.block<3,27>(0,0) << endl;
+  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.3;
 
   OptiflowmeasurementUpdate(H_x, r, noise);
 
@@ -845,106 +884,11 @@ void MsckfVio::estiImuBias(const double time){
     imu_state.opti_speed = speed_msg_buffer[id].second;
   
   // average
-  // imu_state.opti_speed = sum_speed / sum_num;
-
+  if(sum_num > 0)
+    imu_state.opti_speed = sum_speed / sum_num;
   speed_msg_buffer.erase(speed_msg_buffer.begin(),
       speed_msg_buffer.begin()+used_msg);
 
-  // OPTIMIZE
-  // imu_state.m_acc_set.clear();
-  // imu_state.m_gyro_set.clear();
-
-  // for (const auto& imu_msg : imu_msg_buffer) {
-  //   double imu_time = imu_msg.header.stamp.toSec();
-
-  //   if (imu_time < time_bound) {
-  //     continue;
-  //   }
-  //   if (imu_time > time) break;
-
-  //   // Convert the msgs.
-  //   Vector3d m_gyro, m_acc;
-  //   tf::vectorMsgToEigen(imu_msg.linear_acceleration, m_acc);
-  //   tf::vectorMsgToEigen(imu_msg.angular_velocity, m_gyro);
-
-  //   imu_state.m_acc_set.push_back(make_pair(imu_time, m_acc));
-  //   imu_state.m_gyro_set.push_back(make_pair(imu_time, m_gyro));
-  //   // Execute process model.
-  // }
-
-  // // ROS_INFO("CAM STATE SIZE: %d, OPTI FLOW: %f, %f, %f, SIZE: %d", state_server.cam_states.size(),
-  // //   imu_state.opti_speed[0], imu_state.opti_speed[1], imu_state.opti_speed[2], speed_msg_buffer.size());
-  
-  // if(window.size() < 5)
-  //   return;
-
-  // // repropagate();
-  // ceres::Problem problem;
-  // double bias_a[3] = {0, 0, 0};
-  // double bias_w[3] = {0, 0, 0};
-
-  // CamStateServer& cam_states = state_server.cam_states;
-  // ceres::LossFunction *loss_function = new ceres::HuberLoss(0.5);  
-
-  // std::vector<IMUState>::iterator cam, next;
-
-  // for(cam = window.begin(); cam != window.end(); cam++){
-    
-  //   double prev_time = cam->time;
-  //   Eigen::Vector3d prev_acc = cam->m_acc_set.back().second;
-  //   Eigen::Vector3d prev_gyro = cam->m_gyro_set.back().second;
-  //   Eigen::Quaterniond orien = cam->imu_orientation;
-  //   orien.normalize();
-
-  //   next = cam;
-  //   next ++;
-
-  //   if(next == window.end()){
-  //     Eigen::Vector3d speed_i = cam->opti_speed;
-  //     Eigen::Vector3d speed_j = imu_state.opti_speed;
-  //     std::vector<std::pair<double, Eigen::Vector3d>> acc_set = imu_state.m_acc_set;
-  //     std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = imu_state.m_gyro_set;
-
-  //     ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 9, 3, 3>(
-  //       new BiasError(state_server.imu_state.acc_bias, state_server.imu_state.gyro_bias, prev_time, 
-  //         prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
-  //     problem.AddResidualBlock(cost_function, loss_function, bias_a, bias_w);  
-
-  //   }else{      
-  //     Eigen::Vector3d speed_i = cam->opti_speed;
-  //     Eigen::Vector3d speed_j = next->opti_speed;
-  //     std::vector<std::pair<double, Eigen::Vector3d>> acc_set = next->m_acc_set;
-  //     std::vector<std::pair<double, Eigen::Vector3d>> gyro_set = next->m_gyro_set;
-
-  //     ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<BiasError, 9, 3, 3>(
-  //       new BiasError(state_server.imu_state.acc_bias, state_server.imu_state.gyro_bias, prev_time, 
-  //         prev_acc, prev_gyro, speed_i, speed_j, acc_set, gyro_set, orien));     
-  //     problem.AddResidualBlock(cost_function, loss_function, bias_a, bias_w);
-  //   }
-  // }
-
-  // std::cout << "finish add residual block! " << std::endl;
-  // ceres::Solver::Options options;
-  // options.minimizer_progress_to_stdout = false;
-  // options.linear_solver_type = ceres::DENSE_SCHUR;
-  // // options.trust_region_strategy_type = ceres::DOGLEG;
-  // ceres::Solver::Summary summary;
-  // ceres::Solve(options, &problem, &summary);
-  // imu_state.acc_bias[0] = bias_a[0];
-  // imu_state.acc_bias[1] = bias_a[1];
-  // imu_state.acc_bias[2] = bias_a[2];
-  
-  // imu_state.gyro_bias[0] = bias_w[0];
-  // imu_state.gyro_bias[1] = bias_w[1];
-  // imu_state.gyro_bias[2] = bias_w[2];
-  
-  // opti_bias_acc = Eigen::Vector3d(bias_a[0], bias_a[1], bias_a[2]);
-  // opti_bias_gyro = Eigen::Vector3d(bias_w[0], bias_w[1], bias_w[2]);
-
-  // ROS_INFO("bias_a: %f, %f, %f, bias_w: %f, %f, %f", bias_a[0], bias_a[1], bias_a[2], 
-  //   bias_w[0], bias_w[1], bias_w[2]);
-  
-  // repropagate();
 
   return;
 }
@@ -1260,13 +1204,7 @@ void MsckfVio::stateAugmentation(const double& time) {
 
   cam_state.time = time;
   cam_state.orientation = rotationToQuaternion(R_w_c);
-  cam_state.position = t_c_w;
-
-
-  // cam_state.m_acc_set = state_server.imu_state.m_acc_set;
-  // cam_state.m_gyro_set = state_server.imu_state.m_gyro_set;
-  // cam_state.opti_speed = state_server.imu_state.opti_speed;
-  
+  cam_state.position = t_c_w;  
 
 
   cam_state.orientation_null = cam_state.orientation;
@@ -1876,23 +1814,6 @@ void MsckfVio::pruneCamStateBuffer() {
   std::vector<std::pair<double, Eigen::Vector3d>> gyro_set;
   CAMState &curr_camstate = state_server.cam_states[state_server.imu_state.id];
 
-  // if(!remove_first){
-  //   ROS_INFO("before ACC: %d, GYRO: %d",curr_camstate.m_acc_set.size(), curr_camstate.m_gyro_set.size());
-
-  //   for (const auto& cam_id : rm_cam_state_ids) {
-  //     CAMState camstate = state_server.cam_states[cam_id];
-  //     ROS_INFO("in ACC: %d, GYRO: %d", camstate.m_acc_set.size(), camstate.m_gyro_set.size());
-  //     curr_camstate.m_acc_set.insert(curr_camstate.m_acc_set.end(), 
-  //       camstate.m_acc_set.begin(), camstate.m_acc_set.end());
-  //     curr_camstate.m_gyro_set.insert(curr_camstate.m_gyro_set.end(), 
-  //       camstate.m_gyro_set.begin(), camstate.m_gyro_set.end()); 
-  //   }
-  //   ROS_INFO("NEED ADD ACC, after ACC: %d, GYRO: %d",curr_camstate.m_acc_set.size(), curr_camstate.m_gyro_set.size());
-  // }
-  
-  // ROS_INFO("before camsize: %d, speed: %f, %f ,%f", state_server.cam_states.size(), curr_camstate.opti_speed[0], 
-  //   curr_camstate.opti_speed[1], curr_camstate.opti_speed[2]);
-
   for (const auto& cam_id : rm_cam_state_ids) {
     state_server.cam_states.erase(cam_id);
   }
@@ -1997,6 +1918,7 @@ void MsckfVio::publish(const ros::Time& time) {
 
   tf::poseEigenToMsg(T_b_w, odom_msg.pose.pose);
   tf::vectorEigenToMsg(body_velocity, odom_msg.twist.twist.linear);
+  tf::vectorEigenToMsg(imu_state.opti_speed, odom_msg.twist.twist.angular);
 
   // Convert the covariance.
   Matrix3d P_oo = state_server.state_cov.block<3, 3>(0, 0);
@@ -2046,35 +1968,47 @@ void MsckfVio::publish(const ros::Time& time) {
   feature_pub.publish(feature_msg_ptr);
 
   // gt publish
+  
   Isometry3d gt = Isometry3d::Identity();
   while(gt_num < gt_poses.size()){
     if (gt_poses[gt_num].time <= state_server.imu_state.time){
         gt_num ++;
     }else{
-        
         break;
     }
   }
+
+  
   gt.translation() = gt_poses[gt_num].p;
   gt.linear() = gt_poses[gt_num].q.toRotationMatrix();
 
   state_server.cam_states[state_server.imu_state.id].imu_orientation = gt_poses[gt_num].q;
-
-  // state_server.imu_state.imu_orientation = gt_poses[gt_num].q;
-  state_server.imu_state.imu_orientation = state_server.imu_state.orientation;
-
-  if(window.size() > 10){
-    vector<IMUState>::iterator rm_state = window.begin() ;
-    window.erase(rm_state);
-  }
-  window.push_back(state_server.imu_state);    
 
   nav_msgs::Odometry odom_gt;
   odom_gt.header.stamp = time;
   odom_gt.header.frame_id = fixed_frame_id;
   odom_gt.child_frame_id = child_frame_id;
 
+  if(gt_num > 0){
+    
+    int prev_num = gt_num - 1;
+    int next_num = gt_num;
+    double prev_time = gt_poses[prev_num].time;
+    double curr_time = gt_poses[next_num].time;
+    while(curr_time - prev_time < 1e-2 && prev_num > 0){
+      prev_num--;
+      prev_time = gt_poses[prev_num].time;
+    }
+    Eigen::Vector3d prev_p = gt_poses[prev_num].p;
+    Eigen::Vector3d curr_p = gt_poses[next_num].p;
+    
+    Eigen::Vector3d vel = (curr_p - prev_p) / (curr_time - prev_time);
+
+    tf::vectorEigenToMsg(vel, odom_gt.twist.twist.linear);
+  }
+  
   tf::poseEigenToMsg(gt, odom_gt.pose.pose);
+  
   mocap_odom_pub.publish(odom_gt);
 
   BiasEstiInfo bias_info;

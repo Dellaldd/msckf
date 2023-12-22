@@ -22,7 +22,7 @@ def quaternion_to_euler(q, degree_mode=1):
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_4/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/test/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  
@@ -47,10 +47,12 @@ def main():
     
     end = min(esti.shape[0], gt.shape[0])
     start = 0
+    
     for i in range(end):
         q = [esti[i,4], esti[i,5], esti[i,6], esti[i,7]]
-        # euler = R.from_quat(q).as_euler("xyz", degrees=True)
         euler = list(euler_from_quaternion(q))
+        # print(euler[2])
+        
         if(is_euroc):
             if euler[0] > 0:
                 euler[0] -= np.pi
@@ -83,6 +85,9 @@ def main():
     eulers = np.array(eulers)
     fig1, ax1 = plt.subplots(3, 3)
     
+    # esti[:end, 1] = - esti[:end, 1]
+    # esti[:end, 2] = - esti[:end, 2]
+    
     ax1[0][0].plot(esti[:end,0], esti[:end,1]-esti[0,1]+gt[0,1], 'b-', label = 'esti')
     ax1[0][1].plot(esti[:end,0], esti[:end,2]-esti[0,2]+gt[0,2], 'b-', label = 'esti')
     ax1[0][2].plot(esti[:end,0], esti[:end,3]-esti[0,3]+gt[0,3], 'b-', label = 'esti')
@@ -91,9 +96,11 @@ def main():
     ax1[1][1].plot(esti[:end,0], eulers[:end,1]-eulers[0,1]+eulers_gt[0,1], 'b-', label = 'esti')
     ax1[1][2].plot(esti[:end,0], eulers[:end,2]-eulers[0,2]+eulers_gt[0,2], 'b-', label = 'esti')
     
-    ax1[2][0].plot(esti[:end,0], esti[:end,8]-esti[0,8]+gt[0,8], 'b-', label = 'esti')
-    ax1[2][1].plot(esti[:end,0], esti[:end,9]-esti[0,9]+gt[0,9], 'b-', label = 'esti')
-    ax1[2][2].plot(esti[:end,0], esti[:end,10]-esti[0,10]+gt[0,10], 'b-', label = 'esti')
+    ax1[2][0].plot(esti[:end,0], esti[:end,8], 'b-', label = 'esti')
+    ax1[2][1].plot(esti[:end,0], esti[:end,9], 'b-', label = 'esti')
+    ax1[2][2].plot(esti[:end,0], esti[:end,10], 'b-', label = 'esti')
+    
+    
     
     ax1[0][0].plot(gt[:end,0], gt[:end,1], 'r-', label = 'gt')
     ax1[0][1].plot(gt[:end,0], gt[:end,2], 'r-', label = 'gt')
@@ -106,6 +113,10 @@ def main():
     ax1[2][0].plot(gt[:end,0], gt[:end,8], 'r-', label = 'gt')
     ax1[2][1].plot(gt[:end,0], gt[:end,9], 'r-', label = 'gt')
     ax1[2][2].plot(gt[:end,0], gt[:end,10], 'r-', label = 'gt')
+    
+    ax1[2][0].plot(esti[:end,0], esti[:end,11], 'g-', label = 'opti')
+    ax1[2][1].plot(esti[:end,0], esti[:end,12], 'g-', label = 'opti')
+    ax1[2][2].plot(esti[:end,0], esti[:end,13], 'g-', label = 'opti')
     
     ax1[0, 0].set_title("position x(m)")
     ax1[0, 1].set_title("position y(m)")
