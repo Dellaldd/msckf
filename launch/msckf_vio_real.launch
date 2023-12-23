@@ -93,6 +93,8 @@
 
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/real/uav1_08_23_real1/gt.txt"/>
       <param name="gt_type" value="real"/> -->
+
+      <param name="use_gt_initial" value="false"/>
       
 
     </node>

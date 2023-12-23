@@ -132,6 +132,8 @@ class MsckfVio {
         std_srvs::Trigger::Response& res);
 
     void estiImuBias(const double time);
+
+    void initialize_optiflow();
     
     void optiflowProcess();
 
@@ -196,7 +198,7 @@ class MsckfVio {
     std::vector<std::pair<double, Eigen::Vector3d>> speed_msg_buffer;
 
     std::vector<IMUState> window;
-    // Indicate if the gravity vector is set.
+    // Indicate if the grfinish_initialize_optiflowavity vector is set.
     bool is_gravity_set = false, is_gt_time = false;
 
     // Indicate if the received image is the first one. The
@@ -254,7 +256,8 @@ class MsckfVio {
     Eigen::Isometry3d mocap_initial_frame;
 
     Eigen::Vector3d prev_speed;
-    bool is_first_opti = true, use_gt_initial;
+    bool is_first_opti = true, use_gt_initial, finish_initialize_optiflow = false;
+    bool has_remove_state = false;
     std::string gt_path, gt_type;
     double prev_time, prev_pz;
     std::vector<Gt> gt_poses;

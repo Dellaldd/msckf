@@ -30,6 +30,7 @@
 #include <msckf_vio/utils.h>
 #include <ceres/ceres.h>
 #include <msckf_vio/BiasError.h>
+#include <msckf_vio/InitializeOpti.h> 
 
 
 using namespace std;
@@ -575,8 +576,14 @@ void MsckfVio::featureCallback(
   static int critical_time_cntr = 0;
   double processing_start_time = ros::Time::now().toSec();
 
+  if(!finish_initialize_optiflow && window.size() == 10){
+    initialize_optiflow();
+    finish_initialize_optiflow = true;
+    window.clear();
+  }
+
   estiImuBias(msg->header.stamp.toSec());
-  ROS_INFO("finish estiImuBias! ");
+  // ROS_INFO("finish estiImuBias! ");
 
   // Propogate the IMU state.
   // that are received before the image msg.
@@ -584,14 +591,14 @@ void MsckfVio::featureCallback(
   batchImuProcessing(msg->header.stamp.toSec());
   double imu_processing_time = (
       ros::Time::now()-start_time).toSec();
-  ROS_INFO("finish batchImuProcessing! ");
+  // ROS_INFO("finish batchImuProcessing! ");
 
   // Augment the state vector.
   start_time = ros::Time::now();
   stateAugmentation(msg->header.stamp.toSec());
   double state_augmentation_time = (
       ros::Time::now()-start_time).toSec();
-  ROS_INFO("finish stateAugmentation! ");
+  // ROS_INFO("finish stateAugmentation! ");
 
   // Add new observations for existing features or new
   // features in the map server.
@@ -599,23 +606,27 @@ void MsckfVio::featureCallback(
   addFeatureObservations(msg);
   double add_observations_time = (
       ros::Time::now()-start_time).toSec();
-  ROS_INFO("finish addFeatureObservations! ");
+  // ROS_INFO("finish addFeatureObservations! ");
   
-  optiflowProcess();
-  ROS_INFO("optiflowProcess! ");
+  
   // Perform measurement update if necessary.
   start_time = ros::Time::now();
   removeLostFeatures();
   double remove_lost_features_time = (
       ros::Time::now()-start_time).toSec();
-  ROS_INFO("finish removeLostFeatures! ");
+  // ROS_INFO("finish removeLostFeatures! ");
 
   start_time = ros::Time::now();
   pruneCamStateBuffer();
   double prune_cam_states_time = (
       ros::Time::now()-start_time).toSec();
-  ROS_INFO("finish pruneCamStateBuffer! ");
+  // ROS_INFO("finish pruneCamStateBuffer! ");
   
+  if(finish_initialize_optiflow){
+    optiflowProcess();
+    // ROS_INFO("optiflowProcess! ");
+  }
+
   // Publish the odometry.
   start_time = ros::Time::now();
   publish(msg->header.stamp);
@@ -647,6 +658,33 @@ void MsckfVio::featureCallback(
   }
 
   return;
+}
+
+void MsckfVio::initialize_optiflow(){
+  ROS_ERROR(" START INITIALIZE !");
+  ceres::Problem problem;
+  double q_imu_opti[4] = {0, 0, 0, 1};
+
+  ceres::LossFunction *loss_function;
+  loss_function = new ceres::HuberLoss(1.0);
+  ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<InitializeOpti, 30, 4>(
+        new InitializeOpti(window));     
+  problem.AddResidualBlock(cost_function, loss_function, q_imu_opti);
+
+  ceres::Solver::Options options;
+  options.minimizer_progress_to_stdout = true;
+
+  // options.linear_solver_type = ceres::DENSE_SCHUR;
+  // options.trust_region_strategy_type = ceres::DOGLEG;
+  ceres::Solver::Summary summary;
+  ceres::Solve(options, &problem, &summary);
+  Eigen::Quaterniond q(Eigen::Vector4d(q_imu_opti[0], q_imu_opti[1], q_imu_opti[2], q_imu_opti[3]));
+  q.normalize();
+  ROS_ERROR("q: %f, %f, %f ,%f", q.x(), q.y(), q.z(), q.w());
+  
+  cout << "q_imu_opti: " << q.toRotationMatrix() << endl;
+
+  state_server.imu_state.R_imu_opti = q.toRotationMatrix();
 }
 
 void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::VectorXd&r,const Eigen::MatrixXd &noise)
@@ -715,33 +753,33 @@ void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::V
           smallAngleQuaternion(delta_x_imu.head<3>());
   state_server.imu_state.orientation = quaternionMultiplication(
               dq_imu, state_server.imu_state.orientation);
-  cout << "delta dq_imu: " << delta_x_imu.head<3>() << endl;
+  // cout << "delta dq_imu: " << delta_x_imu.head<3>() << endl;
 
   state_server.imu_state.gyro_bias += delta_x_imu.segment<3>(3);
-  cout << "delta gyro_bias: " << delta_x_imu.segment<3>(3) << endl;
+  // cout << "delta gyro_bias: " << delta_x_imu.segment<3>(3) << endl;
 
   state_server.imu_state.velocity += delta_x_imu.segment<3>(6);
-  cout << "delta velocity: " << delta_x_imu.segment<3>(6) << endl;
+  // cout << "delta velocity: " << delta_x_imu.segment<3>(6) << endl;
 
   state_server.imu_state.acc_bias += delta_x_imu.segment<3>(9);
-  cout << "delta acc_bias: " << delta_x_imu.segment<3>(9) << endl;
+  // cout << "delta acc_bias: " << delta_x_imu.segment<3>(9) << endl;
 
   state_server.imu_state.position += delta_x_imu.segment<3>(12);
-  cout << "delta position: " << delta_x_imu.segment<3>(12) << endl;
+  // cout << "delta position: " << delta_x_imu.segment<3>(12) << endl;
 
   const Vector4d dq_extrinsic =
           smallAngleQuaternion(delta_x_imu.segment<3>(15));
-  cout << "dq_extrinsic: " << delta_x_imu.segment<3>(15) << endl;
+  // cout << "dq_extrinsic: " << delta_x_imu.segment<3>(15) << endl;
 
   state_server.imu_state.R_imu_cam0 = quaternionToRotation(
               dq_extrinsic) * state_server.imu_state.R_imu_cam0;  
   state_server.imu_state.t_cam0_imu += delta_x_imu.segment<3>(18);
-  cout << "dt_extrinsic: " << delta_x_imu.segment<3>(18) << endl;
+  // cout << "dt_extrinsic: " << delta_x_imu.segment<3>(18) << endl;
 
 
   const Vector4d dq_extrinsic_opti =
           smallAngleQuaternion(delta_x_imu.segment<3>(21));
-  cout << "dq_extrinsic_opti: " << delta_x_imu.segment<3>(15) << endl;
+  // cout << "dq_extrinsic_opti: " << delta_x_imu.segment<3>(15) << endl;
 
   state_server.imu_state.R_imu_opti = quaternionToRotation(
               dq_extrinsic_opti) * state_server.imu_state.R_imu_opti;
@@ -778,7 +816,26 @@ void MsckfVio::optiflowProcess(){
 
   IMUState &imu_state = state_server.imu_state;
 
-  Eigen::Vector3d vel;
+  H_x.block<3,3>(0,6) = imu_state.R_imu_opti;// q bg v ba p
+  H_x.block<3,3>(0,21) = -skewSymmetric(imu_state.R_imu_opti * imu_state.velocity);
+
+  // H_x.block<3,3>(0,6) = Eigen::Matrix3d::Identity();// q bg v ba p
+
+  r.segment<3>(0) = imu_state.opti_speed - imu_state.velocity;
+  cout << "r: " << r.transpose() << " opti: " << imu_state.opti_speed.transpose() 
+    << " vel: " << imu_state.velocity.transpose() << endl;
+
+  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
+
+  OptiflowmeasurementUpdate(H_x, r, noise);
+
+  cout << "R_imu_opti: " << imu_state.R_imu_opti << endl;
+
+}
+
+void MsckfVio::estiImuBias(const double time){
+
+  Eigen::Vector3d vel = Eigen::Vector3d::Zero();
   int num = gt_num;
   while(num < gt_poses.size()){
     if (gt_poses[num].time <= state_server.imu_state.time){
@@ -793,33 +850,21 @@ void MsckfVio::optiflowProcess(){
     int next_num = num;
     double prev_time = gt_poses[prev_num].time;
     double curr_time = gt_poses[next_num].time;
+    Eigen::Vector3d prev_p = gt_poses[prev_num].p;
+    Eigen::Vector3d curr_p = gt_poses[next_num].p;
+
     // while(curr_time - prev_time < 1e-2 && prev_num > 0){
     //   prev_num--;
     //   prev_time = gt_poses[prev_num].time;
+    //   prev_p = gt_poses[prev_num].p;
     // }
-    cout << "next_num - prev_num: " << next_num - prev_num << endl;
-    Eigen::Vector3d prev_p = gt_poses[prev_num].p;
-    Eigen::Vector3d curr_p = gt_poses[next_num].p;
+
     vel = (curr_p - prev_p) / (curr_time - prev_time);
+    vel = gt_poses[num].vel;
+    cout << "vel: " << vel.transpose() << " next_num: " << next_num << " prev_num: " << prev_num << endl;
+
   }
-  imu_state.opti_speed = vel;
-
-  H_x.block<3,3>(0,6) = imu_state.R_imu_opti;// q bg v ba p
-  H_x.block<3,3>(0,21) = -skewSymmetric(imu_state.R_imu_opti * imu_state.velocity);
-
-  // H_x.block<3,3>(0,6) = Eigen::Matrix3d::Identity();// q bg v ba p
-
-  r.segment<3>(0) = imu_state.opti_speed - imu_state.velocity;
-  cout << "r: " << r.transpose() << " opti: " << imu_state.opti_speed.transpose() 
-    << " vel: " << imu_state.velocity.transpose() << endl;
-
-  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
-
-  OptiflowmeasurementUpdate(H_x, r, noise);
-
-}
-
-void MsckfVio::estiImuBias(const double time){
+  state_server.imu_state.opti_speed = vel;
 
   if(speed_msg_buffer.size() <= 0)
     return;
@@ -1452,14 +1497,14 @@ void MsckfVio::measurementUpdate(
       dq_imu, state_server.imu_state.orientation);
 
   state_server.imu_state.gyro_bias += delta_x_imu.segment<3>(3);
-  cout << "delta gyro_bias: " << delta_x_imu.segment<3>(3) << endl;
+  // cout << "delta gyro_bias: " << delta_x_imu.segment<3>(3) << endl;
 
   state_server.imu_state.velocity += delta_x_imu.segment<3>(6);
   state_server.imu_state.acc_bias += delta_x_imu.segment<3>(9);
-  cout << "delta acc_bias: " << delta_x_imu.segment<3>(9) << endl;
+  // cout << "delta acc_bias: " << delta_x_imu.segment<3>(9) << endl;
 
   state_server.imu_state.position += delta_x_imu.segment<3>(12);
-  cout << "delta position: " << delta_x_imu.segment<3>(12) << endl;
+  // cout << "delta position: " << delta_x_imu.segment<3>(12) << endl;
 
   const Vector4d dq_extrinsic =
     smallAngleQuaternion(delta_x_imu.segment<3>(15));
@@ -1469,7 +1514,7 @@ void MsckfVio::measurementUpdate(
 
   const Vector4d dq_extrinsic_opti =
           smallAngleQuaternion(delta_x_imu.segment<3>(21));
-  cout << "dq_extrinsic_opti: " << delta_x_imu.segment<3>(15) << endl;
+  // cout << "dq_extrinsic_opti: " << delta_x_imu.segment<3>(15) << endl;
 
   state_server.imu_state.R_imu_opti = quaternionToRotation(
               dq_extrinsic_opti) * state_server.imu_state.R_imu_opti;
@@ -1568,8 +1613,10 @@ void MsckfVio::removeLostFeatures() {
     map_server.erase(feature_id);
 
   // Return if there is no lost feature to be processed.
+  cout << "processed_feature_ids: " << processed_feature_ids.size() << endl;
   if (processed_feature_ids.size() == 0) return;
 
+  // has_remove_state = true;
   MatrixXd H_x = MatrixXd::Zero(jacobian_row_size,
       24+6*state_server.cam_states.size());
   VectorXd r = VectorXd::Zero(jacobian_row_size);
@@ -1652,6 +1699,7 @@ void MsckfVio::findRedundantCamStates(
       ++first_cam_state_iter;
       // ROS_INFO("remove first frame!");
       remove_first = true;
+      has_remove_state = true;
     }
   }
 
@@ -1860,6 +1908,11 @@ void MsckfVio::onlineReset() {
 
 void MsckfVio::publish(const ros::Time& time) {
   
+  // add imu state to window;
+  if(!finish_initialize_optiflow && has_remove_state){
+    window.push_back(state_server.imu_state);
+  }
+
   // Convert the IMU frame to the body frame.
   const IMUState& imu_state = state_server.imu_state;
   Eigen::Isometry3d T_i_w = Eigen::Isometry3d::Identity();
@@ -1968,15 +2021,17 @@ void MsckfVio::publish(const ros::Time& time) {
     int next_num = gt_num;
     double prev_time = gt_poses[prev_num].time;
     double curr_time = gt_poses[next_num].time;
-    while(curr_time - prev_time < 1e-2 && prev_num > 0){
-      prev_num--;
-      prev_time = gt_poses[prev_num].time;
-    }
+
+    // while(curr_time - prev_time < 1e-2 && prev_num > 0){
+    //   prev_num--;
+    //   prev_time = gt_poses[prev_num].time;
+    // }
     Eigen::Vector3d prev_p = gt_poses[prev_num].p;
     Eigen::Vector3d curr_p = gt_poses[next_num].p;
     
     Eigen::Vector3d vel = (curr_p - prev_p) / (curr_time - prev_time);
 
+    vel = gt_poses[gt_num].vel;
     tf::vectorEigenToMsg(vel, odom_gt.twist.twist.linear);
   }
   
