@@ -56,8 +56,8 @@
 
       <remap from="~imu" to="/mavros/imu/full"/>
       <remap from="~features" to="/firefly_sbx/image_processor/features"/>
-      <remap from="~optisensor" to="/mavros/vfr_hud1"/>
-      <remap from="~optitrack" to="/outer_velocity"/>
+      <remap from="~optisensor" to="/mavros/vfr_hud"/>
+      <remap from="~optitrack" to="/outer_velocity1"/>
 
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v101/gt.txt"/>
       <param name="gt_type" value="euroc"/> -->

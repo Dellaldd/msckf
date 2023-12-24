@@ -875,7 +875,7 @@ void MsckfVio::estiImuBias(const double time){
   }
   state_server.imu_state.opti_speed = vel;
 
-
+  cout << "speed_msg_buffer.size(): " << speed_msg_buffer.size() << endl;
   if(speed_msg_buffer.size() <= 0)
     return;
 
@@ -883,8 +883,6 @@ void MsckfVio::estiImuBias(const double time){
   int used_msg = 0;
   double time_bound = imu_state.time;
   int id = 0;
-  Eigen::Vector3d sum_speed = Eigen::Vector3d::Zero();
-  int sum_num = 0;
   for(; id < speed_msg_buffer.size(); id++){
     double msg_time = speed_msg_buffer[id].first;
     if (msg_time < time_bound) {
@@ -896,8 +894,6 @@ void MsckfVio::estiImuBias(const double time){
       break;
     }  
     ++used_msg;
-    sum_speed += speed_msg_buffer[id].second;
-    sum_num ++;
   }
 
   // linear 
@@ -913,7 +909,7 @@ void MsckfVio::estiImuBias(const double time){
     opti_speed = speed_msg_buffer[id].second;
 
   imu_state.opti_speed = opti_speed;
-
+  cout << "opti_speed: " << opti_speed.transpose() << endl;
   // if(window.size() > 0){
   //   Eigen::Vector3d sum_opti_speed = opti_speed;
 
