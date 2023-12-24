@@ -66,11 +66,11 @@ def main():
         # euler_gt = R.from_quat(q_gt).as_euler("xyz", degrees=True)
         euler_gt = list(euler_from_quaternion(q_gt))
         
-        if(is_euroc):
-            if euler_gt[0] > 0:
-                euler_gt[0] -= np.pi
-            else:
-                euler_gt[0] += np.pi
+        # if(is_euroc):
+        #     if euler_gt[0] > 0:
+        #         euler_gt[0] -= np.pi
+        #     else:
+        #         euler_gt[0] += np.pi
         
         eulers_gt.append(euler_gt)
         
@@ -110,13 +110,13 @@ def main():
     ax1[1][1].plot(gt[:end,0], eulers_gt[:end,1], 'r-', label = 'gt')
     ax1[1][2].plot(gt[:end,0], eulers_gt[:end,2], 'r-', label = 'gt')
     
-    ax1[2][0].plot(gt[:end,0], gt[:end,8], 'r-', label = 'gt')
-    ax1[2][1].plot(gt[:end,0], gt[:end,9], 'r-', label = 'gt')
-    ax1[2][2].plot(gt[:end,0], gt[:end,10], 'r-', label = 'gt')
+    # ax1[2][0].plot(gt[:end,0], gt[:end,8], 'r-', label = 'gt')
+    # ax1[2][1].plot(gt[:end,0], gt[:end,9], 'r-', label = 'gt')
+    # ax1[2][2].plot(gt[:end,0], gt[:end,10], 'r-', label = 'gt')
     
-    # ax1[2][0].plot(esti[:end,0], esti[:end,11], 'g-', label = 'opti')
-    # ax1[2][1].plot(esti[:end,0], esti[:end,12], 'g-', label = 'opti')
-    # ax1[2][2].plot(esti[:end,0], esti[:end,13], 'g-', label = 'opti')
+    ax1[2][0].plot(esti[:end,0], esti[:end,11], 'g-', label = 'opti')
+    ax1[2][1].plot(esti[:end,0], esti[:end,12], 'g-', label = 'opti')
+    ax1[2][2].plot(esti[:end,0], esti[:end,13], 'g-', label = 'opti')
     
     ax1[0, 0].set_title("position x(m)")
     ax1[0, 1].set_title("position y(m)")

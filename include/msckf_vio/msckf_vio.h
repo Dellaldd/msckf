@@ -19,6 +19,8 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Vector3Stamped.h>
+#include <geometry_msgs/TwistStamped.h>
+
 #include <mavros_msgs/VFR_HUD.h>
 #include <nav_msgs/Odometry.h>
 #include <tf/transform_broadcaster.h>
@@ -100,7 +102,9 @@ class MsckfVio {
      */
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
     
-    void optiflowCallback(const mavros_msgs::VFR_HUDConstPtr& msg);
+    void optisensorCallback(const mavros_msgs::VFR_HUDConstPtr& msg);
+
+    void optitrackCallback(const geometry_msgs::TwistStampedConstPtr& msg);
     /*
      * @brief featureCallback
      *    Callback function for feature measurements.
@@ -226,7 +230,8 @@ class MsckfVio {
     // Subscribers and publishers
     ros::Subscriber imu_sub;
     ros::Subscriber feature_sub;
-    ros::Subscriber optiflow_sub;
+    ros::Subscriber optisensor_sub;
+    ros::Subscriber optitrack_sub;
     
     ros::Publisher odom_pub;
     ros::Publisher feature_pub;
