@@ -66,7 +66,6 @@ struct IMUState {
   Eigen::Vector3d t_cam0_imu;
 
   Eigen::Matrix3d R_imu_opti = Eigen::Matrix3d::Identity();
-  Eigen::Vector3d t_imu_opti = Eigen::Vector3d::Zero();
 
   // These three variables should have the same physical
   // interpretation with `orientation`, `position`, and
