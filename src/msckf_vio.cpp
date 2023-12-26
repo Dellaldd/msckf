@@ -372,10 +372,12 @@ void MsckfVio::optisensorCallback(const mavros_msgs::VFR_HUDConstPtr &msg){
       speed = prev_speed;
     prev_speed = speed;
     speed_msg_buffer.push_back(make_pair(time, speed));
+    cout << "speed: " << speed.transpose() << endl;
   }
   prev_pz = curr_pz;
   prev_time = time;
   is_first_opti = false;
+  
 }
 
 void MsckfVio::imuCallback(

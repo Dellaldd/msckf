@@ -2,7 +2,7 @@
 
   <arg name="robot" default="firefly_sbx"/>
   <arg name="calibration_file"
-    default="$(find msckf_vio)/config/real/camchain-imucam-euroc.yaml"/>
+    default="$(find msckf_vio)/config/real/kalibr_1-camchain-imucam.yaml"/>
 
   <!-- Image Processor Nodelet  -->
   <group ns="$(arg robot)">

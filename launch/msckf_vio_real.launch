@@ -3,7 +3,7 @@
   <arg name="robot" default="firefly_sbx"/>
   <arg name="fixed_frame_id" default="world"/>
   <arg name="calibration_file"
-    default="$(find msckf_vio)/config/real/camchain-imucam-euroc.yaml"/>
+    default="$(find msckf_vio)/config/real/kalibr_1-camchain-imucam.yaml"/>
 
   <!-- Image Processor Nodelet  -->
   <include file="$(find msckf_vio)/launch/image_processor_real.launch">
@@ -56,8 +56,8 @@
 
       <remap from="~imu" to="/mavros/imu/full"/>
       <remap from="~features" to="/firefly_sbx/image_processor/features"/>
-      <remap from="~optisensor" to="/mavros/vfr_hud"/>
-      <remap from="~optitrack" to="/outer_velocity1"/>
+      <remap from="~optisensor" to="/mavros/vfr_hud1"/>
+      <remap from="~optitrack" to="/outer_velocity"/>
 
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v101/gt.txt"/>
       <param name="gt_type" value="euroc"/> -->
