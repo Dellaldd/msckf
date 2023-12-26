@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.transform import Rotation as R
-from tf.transformations import euler_from_quaternion
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
 import math
 
 def quaternion_to_euler(q, degree_mode=1):
@@ -22,12 +22,13 @@ def quaternion_to_euler(q, degree_mode=1):
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/test_use_opti/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/data_12_22_2/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  
     esti_path = foldpath + "traj_estimate_velocity.txt"
     bias_path = foldpath + "bias.txt"
+    new_esti_path = foldpath + "stamped_traj_estimate.txt"
     msckf_bias_path = msckf_foldpath + "bias.txt"
     is_euroc = True
     use_msckf = False
@@ -39,6 +40,9 @@ def main():
     esti = np.loadtxt(esti_path, delimiter=' ', skiprows=1)
     bias = np.loadtxt(bias_path, delimiter=' ', skiprows=1)
     msckf_bias = np.loadtxt(msckf_bias_path, delimiter=' ', skiprows=1)
+    f_new_esti = open(new_esti_path, 'w')
+    
+    new_esti_state = []
     
     print(gt.shape)
     eulers = []
@@ -51,7 +55,6 @@ def main():
     for i in range(end):
         q = [esti[i,4], esti[i,5], esti[i,6], esti[i,7]]
         euler = list(euler_from_quaternion(q))
-        # print(euler[2])
         
         if(is_euroc):
             if euler[0] > 0:
@@ -59,11 +62,14 @@ def main():
             else:
                 euler[0] += np.pi
                 
-        # euler = quaternion_to_euler(q)
         eulers.append(euler)
+        new_q = quaternion_from_euler(euler[0], euler[1], euler[2])
         
+        new_esti_state.append([str(esti[i,0]), str(esti[i,1]), str(esti[i,2]), str(esti[i,3]),
+            str(new_q[0]), str(new_q[1]), str(new_q[2]), str(new_q[3])])
+        
+        # gt
         q_gt = [gt[i,4], gt[i,5], gt[i,6], gt[i,7]]
-        # euler_gt = R.from_quat(q_gt).as_euler("xyz", degrees=True)
         euler_gt = list(euler_from_quaternion(q_gt))
         
         # if(is_euroc):
@@ -71,6 +77,7 @@ def main():
         #         euler_gt[0] -= np.pi
         #     else:
         #         euler_gt[0] += np.pi
+        print(np.array(euler) - np.array(euler_gt))
         
         eulers_gt.append(euler_gt)
         
@@ -81,13 +88,20 @@ def main():
     error_pos = np.sum(error_pos, axis=1)
     print(np.sum(np.sqrt(error_pos))/error_pos.shape[0]) 
     
+    
+    f_new_esti.write("# timestamp tx ty tz qx qy qz qw")
+    f_new_esti.write('\r\n')
+    for data in new_esti_state:
+        f_new_esti.write(' '.join(data))
+        f_new_esti.write('\r\n')
+    f_new_esti.close()
+    
+    
     eulers_gt = np.array(eulers_gt)
     eulers = np.array(eulers)
     fig1, ax1 = plt.subplots(3, 3)
     
-    # esti[:end, 1] = - esti[:end, 1]
-    # esti[:end, 2] = - esti[:end, 2]
-    
+    # draw
     ax1[0][0].plot(esti[:end,0], esti[:end,1]-esti[0,1]+gt[0,1], 'b-', label = 'esti')
     ax1[0][1].plot(esti[:end,0], esti[:end,2]-esti[0,2]+gt[0,2], 'b-', label = 'esti')
     ax1[0][2].plot(esti[:end,0], esti[:end,3]-esti[0,3]+gt[0,3], 'b-', label = 'esti')
