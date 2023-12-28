@@ -103,17 +103,17 @@ def CreateBag(foldpath, noise, deviation, bag_save_path):
         speed = Vector3Stamped()           
         speedStamp = rospy.rostime.Time.from_sec(float(speedtimesteps[i] * 1e-9))
         speed.header.stamp = speedStamp
-        if( not noise):
-            speed.vector.x = float(speeddata[i][0] + random.gauss(0, deviation) * noise)
-            speed.vector.y = float(speeddata[i][1] + random.gauss(0, deviation) * noise)
-            speed.vector.z = float(speeddata[i][2] + random.gauss(0, deviation) * noise)
-        else:
-            speed.vector.x = float(speeddata[i][0])
-            speed.vector.y = float(speeddata[i][1])
-            speed.vector.z = float(speeddata[i][2])
+       
+        speed.vector.x = float(speeddata[i][0] + random.gauss(0, deviation) * noise)
+        speed.vector.y = float(speeddata[i][1] + random.gauss(0, deviation) * noise)
+        speed.vector.z = float(speeddata[i][2] + random.gauss(0, deviation) * noise)
+       
         
         opti_speed.append(np.array([speedtimesteps[i], speed.vector.x, speed.vector.y, speed.vector.z]))
-        bag.write("/speed", speed, speedStamp)
+        if(noise == 0):
+            bag.write("/gt_speed", speed, speedStamp)
+        else:
+            bag.write("/noise_speed", speed, speedStamp)
     
     for i in range(len(cameratimesteps)):  
         print(i)
@@ -151,8 +151,9 @@ def CreateBag(foldpath, noise, deviation, bag_save_path):
     f_opti_speed.close()
 
 if __name__ == "__main__":
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/v203/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/v101/"
     bag_save_path = foldpath + "noise_0_1/"
+    
     noise = 0.1
     deviation = 1
     print(foldpath)

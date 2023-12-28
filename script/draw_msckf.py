@@ -19,22 +19,14 @@ def quaternion_to_euler(q, degree_mode=1):
     euler = np.array([roll, pitch, yaw])
     return euler
 
+
 def main():
-    bagname = "v101"
-    noisetype = "noise_0_1"
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/" + bagname + "/" + noisetype + "/"
-    msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
     
-    speed_path = "/home/ldd/msckf_ws/src/msckf_vio/dataset/" + bagname + "/" + noisetype + "/opti_speed.txt"
-    speed_gt_path = "/home/ldd/msckf_ws/src/msckf_vio/dataset/" + bagname + "/" + "no_noise/opti_speed.txt"
-    
-    gt_path = foldpath + "groundtruth_velocity.txt"  
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v102/"
+    gt_path = foldpath + "groundtruth_velocity.txt"
     esti_path = foldpath + "traj_estimate_velocity.txt"
     bias_path = foldpath + "bias.txt"
-    msckf_bias_path = msckf_foldpath + "bias.txt"
-    msckf_path = foldpath + "traj_estimate_velocity.txt"
     is_euroc = True
-    use_msckf = False
     
     save_position_path = foldpath + "position.png"
     save_bias_path = foldpath + "bias.png"
@@ -42,22 +34,17 @@ def main():
     gt = np.loadtxt(gt_path, delimiter=' ', skiprows=1)
     esti = np.loadtxt(esti_path, delimiter=' ', skiprows=1)
     bias = np.loadtxt(bias_path, delimiter=' ', skiprows=1)
-    msckf = np.loadtxt(msckf_path, delimiter=' ', skiprows=1)
-    msckf_bias = np.loadtxt(msckf_bias_path, delimiter=' ', skiprows=1)
-    
-    speed = np.loadtxt(speed_path, delimiter=' ', skiprows=1)
-    speed_gt = np.loadtxt(speed_gt_path, delimiter=' ', skiprows=1)
     
     print(gt.shape)
     eulers = []
     eulers_gt = []
-    eulers_msckf = []
     error_pos = []
     
     end = min(esti.shape[0], gt.shape[0])
     start = 0
-    for i in range(end):
+    for i in range(gt.shape[0]):
         q = [esti[i,4], esti[i,5], esti[i,6], esti[i,7]]
+        # euler = R.from_quat(q).as_euler("xyz", degrees=True)
         euler = list(euler_from_quaternion(q))
         if(is_euroc):
             if euler[0] > 0:
@@ -65,19 +52,11 @@ def main():
             else:
                 euler[0] += np.pi
                 
+        # euler = quaternion_to_euler(q)
         eulers.append(euler)
         
-        q_msckf = [msckf[i,4], msckf[i,5], msckf[i,6], msckf[i,7]]
-        euler_msckf = list(euler_from_quaternion(q_msckf))
-        if(is_euroc):
-            if euler_msckf[0] > 0:
-                    euler_msckf[0] -= np.pi
-            else:
-                euler_msckf[0] += np.pi
-                
-        eulers_msckf.append(euler_msckf)
-        
         q_gt = [gt[i,4], gt[i,5], gt[i,6], gt[i,7]]
+        # euler_gt = R.from_quat(q_gt).as_euler("xyz", degrees=True)
         euler_gt = list(euler_from_quaternion(q_gt))
         if(is_euroc):
             if euler_gt[0] > 0:
@@ -109,7 +88,6 @@ def main():
     ax1[2][1].plot(esti[:end,0], esti[:end,9], 'b-', label = 'esti')
     ax1[2][2].plot(esti[:end,0], esti[:end,10], 'b-', label = 'esti')
     
-    
     ax1[0][0].plot(gt[:end,0], gt[:end,1], 'r-', label = 'gt')
     ax1[0][1].plot(gt[:end,0], gt[:end,2], 'r-', label = 'gt')
     ax1[0][2].plot(gt[:end,0], gt[:end,3], 'r-', label = 'gt')
@@ -118,17 +96,9 @@ def main():
     ax1[1][1].plot(gt[:end,0], eulers_gt[:end,1], 'r-', label = 'gt')
     ax1[1][2].plot(gt[:end,0], eulers_gt[:end,2], 'r-', label = 'gt')
     
-    ax1[2][0].plot(speed_gt[:,0]*1e-9, speed_gt[:,1], 'r-', label = 'gt')
-    ax1[2][1].plot(speed_gt[:,0]*1e-9, speed_gt[:,2], 'r-', label = 'gt')
-    ax1[2][2].plot(speed_gt[:,0]*1e-9, speed_gt[:,3], 'r-', label = 'gt')
-    
-    ax1[2][0].plot(speed[:,0]*1e-9, speed[:,1], 'g-', label = 'speed_noise')
-    ax1[2][1].plot(speed[:,0]*1e-9, speed[:,2], 'g-', label = 'speed_noise')
-    ax1[2][2].plot(speed[:,0]*1e-9, speed[:,3], 'g-', label = 'speed_noise')
-    
-    # ax1[2][0].plot(msckf[:end,0], msckf[:end,8], 'y-', label = 'msckf')
-    # ax1[2][1].plot(msckf[:end,0], msckf[:end,9], 'y-', label = 'msckf')
-    # ax1[2][2].plot(msckf[:end,0], msckf[:end,10], 'y-', label = 'msckf')
+    ax1[2][0].plot(gt[:end,0], gt[:end,8], 'r-', label = 'gt')
+    ax1[2][1].plot(gt[:end,0], gt[:end,9], 'r-', label = 'gt')
+    ax1[2][2].plot(gt[:end,0], gt[:end,10], 'r-', label = 'gt')
     
     ax1[0, 0].set_title("position x(m)")
     ax1[0, 1].set_title("position y(m)")
@@ -149,46 +119,15 @@ def main():
     plt.savefig(save_position_path, dpi=300)
 
     fig2, ax2 = plt.subplots(4, 3)
-    ax2[0][0].plot(bias[start:end,0], bias[start:end,1], 'b-')
-    ax2[0][1].plot(bias[start:end,0], bias[start:end,2], 'b-')
-    ax2[0][2].plot(bias[start:end,0], bias[start:end,3], 'b-')
+    ax2[0][0].plot(bias[start:end,0], bias[start:end,1], 'r-')
+    ax2[0][1].plot(bias[start:end,0], bias[start:end,2], 'r-')
+    ax2[0][2].plot(bias[start:end,0], bias[start:end,3], 'r-')
     
-    ax2[1][0].plot(bias[start:end,0], bias[start:end,4], 'b-')
-    ax2[1][1].plot(bias[start:end,0], bias[start:end,5], 'b-')
-    ax2[1][2].plot(bias[start:end,0], bias[start:end,6], 'b-')  
+    ax2[1][0].plot(bias[start:end,0], bias[start:end,4], 'r-')
+    ax2[1][1].plot(bias[start:end,0], bias[start:end,5], 'r-')
+    ax2[1][2].plot(bias[start:end,0], bias[start:end,6], 'r-')    
     
-    # ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.002153, 'r-')
-    # ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.020744, 'r-')
-    # ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.075806, 'r-')  
- 
-    # ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.0546303, 'r-')
-    # ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.0208792, 'r-')
-    # ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.094797, 'r-') 
-    
-    # -0.002341, 0.021815, 0.07660
-    ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.002341, 'r-', label = 'gt')
-    ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.021815, 'r-', label = 'gt')
-    ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.07660, 'r-', label = 'gt')
-    
-    ax2[0][0].plot(bias[start:end,0], bias[start:end,7], 'g-', label = 'opti_bias')
-    ax2[0][1].plot(bias[start:end,0], bias[start:end,8], 'g-', label = 'opti_bias')
-    ax2[0][2].plot(bias[start:end,0], bias[start:end,9], 'g-', label = 'opti_bias')
-    
-    ax2[1][0].plot(bias[start:end,0], bias[start:end,10], 'g-', label = 'opti_bias')
-    ax2[1][1].plot(bias[start:end,0], bias[start:end,11], 'g-', label = 'opti_bias')
-    ax2[1][2].plot(bias[start:end,0], bias[start:end,12], 'g-', label = 'opti_bias')  
-    
-    ax2[2][0].plot(bias[start:end,0], bias[start:end,13], 'g-')
-    
-    if(use_msckf):
-        ax2[0][0].plot(msckf_bias[start:end,0], msckf_bias[start:end,1], 'y-', label = 'msckf')
-        ax2[0][1].plot(msckf_bias[start:end,0], msckf_bias[start:end,2], 'y-', label = 'msckf')
-        ax2[0][2].plot(msckf_bias[start:end,0], msckf_bias[start:end,3], 'y-', label = 'msckf')
-        
-        ax2[1][0].plot(msckf_bias[start:end,0], msckf_bias[start:end,4], 'y-', label = 'msckf')
-        ax2[1][1].plot(msckf_bias[start:end,0], msckf_bias[start:end,5], 'y-', label = 'msckf')
-        ax2[1][2].plot(msckf_bias[start:end,0], msckf_bias[start:end,6], 'y-', label = 'msckf')
-    
+       
     ax2[0, 0].set_title("acc_x(m^s-2)")
     ax2[0, 1].set_title("acc_y(m^s-2)")
     ax2[0, 2].set_title("acc_z(m^s-2)")
@@ -204,8 +143,7 @@ def main():
     ax2[3, 0].set_title("bias_a(m^s-2)")
     ax2[3, 1].set_title("bias_w(rad/s)")
     
-    lines, labels = fig2.axes[-1].get_legend_handles_labels()
-    fig2.legend(lines, labels, loc = 'upper right') # 图例的位置
+    plt.legend()
     fig2.tight_layout()
     plt.savefig(save_bias_path, dpi=300)
     

@@ -595,8 +595,6 @@ void MsckfVio::featureCallback(
   double publish_time = (
       ros::Time::now()-start_time).toSec();
   
-  
-
   // Reset the system if necessary.
   onlineReset();
 
@@ -764,25 +762,18 @@ void MsckfVio::optiflowProcess(){
   // Eigen::MatrixXd H_ = H_x_imu - H_x_imu * u * (u.transpose() * u).inverse() * u.transpose();
   // H_x.block<3,24>(0,0) = H_;
 
-  Eigen::MatrixXd H_x_imu = Eigen::MatrixXd::Zero(3,6);
-  H_x_imu.block<3,3>(0,0) = H_x.block<3,3>(0,6);
-  H_x_imu.block<3,3>(0,3) = H_x.block<3,3>(0,21);
+  // observability
+  // Eigen::MatrixXd H_x_imu = Eigen::MatrixXd::Zero(3,6);
+  // H_x_imu.block<3,3>(0,0) = H_x.block<3,3>(0,6);
+  // H_x_imu.block<3,3>(0,3) = H_x.block<3,3>(0,21);
 
-  Eigen::VectorXd u = Eigen::VectorXd::Zero(6);
-  u.segment<3>(0) = -skewSymmetric(imu_state.velocity_null) * IMUState::gravity;
-  u.segment<3>(3) = imu_state.R_imu_opti * IMUState::gravity;
-  Eigen::MatrixXd H_ = H_x_imu - H_x_imu * u * (u.transpose() * u).inverse() * u.transpose();
-  
-  // cout << u.transpose() << endl;
-  // cout << "------------------------------------" << endl;
-  // cout << H_x_imu << endl;
-  // cout << "------------------------------------" << endl;
-  // cout << "vel_null: " << imu_state.velocity_null.transpose() << endl;
-  // cout << "------------------------------------" << endl;
-  // cout << H_ << endl;
+  // Eigen::VectorXd u = Eigen::VectorXd::Zero(6);
+  // u.segment<3>(0) = -skewSymmetric(imu_state.velocity_null) * IMUState::gravity;
+  // u.segment<3>(3) = imu_state.R_imu_opti * IMUState::gravity;
+  // Eigen::MatrixXd H_ = H_x_imu - H_x_imu * u * (u.transpose() * u).inverse() * u.transpose();
  
-  H_x.block<3,3>(0,6) = H_.block<3,3>(0,0);
-  H_x.block<3,3>(0,21) = H_.block<3,3>(0,3);
+  // H_x.block<3,3>(0,6) = H_.block<3,3>(0,0);
+  // H_x.block<3,3>(0,21) = H_.block<3,3>(0,3);
 
   OptiflowmeasurementUpdate(H_x, r, noise);
 
