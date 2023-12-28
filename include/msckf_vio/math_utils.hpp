@@ -21,6 +21,92 @@ namespace msckf_vio {
  *          [ w3   0 -w1]
  *          [-w2  w1   0]
  */
+inline Eigen::Matrix<double, 3, 3> skew_x(const Eigen::Matrix<double, 3, 1> &w) {
+  Eigen::Matrix<double, 3, 3> w_x;
+  w_x << 0, -w(2), w(1), w(2), 0, -w(0), -w(1), w(0), 0;
+  return w_x;
+}
+
+inline Eigen::Matrix<double, 3, 3> quat_2_Rot(const Eigen::Matrix<double, 4, 1> &q) {
+  Eigen::Matrix<double, 3, 3> q_x = skew_x(q.block(0, 0, 3, 1));
+  Eigen::MatrixXd Rot = (2 * std::pow(q(3, 0), 2) - 1) * Eigen::MatrixXd::Identity(3, 3) - 2 * q(3, 0) * q_x +
+                        2 * q.block(0, 0, 3, 1) * (q.block(0, 0, 3, 1).transpose());
+  return Rot;
+}
+
+inline Eigen::Matrix<double, 4, 1> rot_2_quat(const Eigen::Matrix<double, 3, 3> &rot) {
+  Eigen::Matrix<double, 4, 1> q;
+  double T = rot.trace();
+  if ((rot(0, 0) >= T) && (rot(0, 0) >= rot(1, 1)) && (rot(0, 0) >= rot(2, 2))) {
+    q(0) = sqrt((1 + (2 * rot(0, 0)) - T) / 4);
+    q(1) = (1 / (4 * q(0))) * (rot(0, 1) + rot(1, 0));
+    q(2) = (1 / (4 * q(0))) * (rot(0, 2) + rot(2, 0));
+    q(3) = (1 / (4 * q(0))) * (rot(1, 2) - rot(2, 1));
+
+  } else if ((rot(1, 1) >= T) && (rot(1, 1) >= rot(0, 0)) && (rot(1, 1) >= rot(2, 2))) {
+    q(1) = sqrt((1 + (2 * rot(1, 1)) - T) / 4);
+    q(0) = (1 / (4 * q(1))) * (rot(0, 1) + rot(1, 0));
+    q(2) = (1 / (4 * q(1))) * (rot(1, 2) + rot(2, 1));
+    q(3) = (1 / (4 * q(1))) * (rot(2, 0) - rot(0, 2));
+  } else if ((rot(2, 2) >= T) && (rot(2, 2) >= rot(0, 0)) && (rot(2, 2) >= rot(1, 1))) {
+    q(2) = sqrt((1 + (2 * rot(2, 2)) - T) / 4);
+    q(0) = (1 / (4 * q(2))) * (rot(0, 2) + rot(2, 0));
+    q(1) = (1 / (4 * q(2))) * (rot(1, 2) + rot(2, 1));
+    q(3) = (1 / (4 * q(2))) * (rot(0, 1) - rot(1, 0));
+  } else {
+    q(3) = sqrt((1 + T) / 4);
+    q(0) = (1 / (4 * q(3))) * (rot(1, 2) - rot(2, 1));
+    q(1) = (1 / (4 * q(3))) * (rot(2, 0) - rot(0, 2));
+    q(2) = (1 / (4 * q(3))) * (rot(0, 1) - rot(1, 0));
+  }
+  if (q(3) < 0) {
+    q = -q;
+  }
+  // normalize and return
+  q = q / (q.norm());
+  return q;
+}
+
+
+inline void gram_schmidt(const Eigen::Vector3d &gravity_inI, Eigen::Matrix3d &R_GtoI) {
+
+  // This will find an orthogonal vector to gravity which is our local z-axis
+  // We need to ensure we normalize after each one such that we obtain unit vectors
+  Eigen::Vector3d z_axis = gravity_inI / gravity_inI.norm();
+  Eigen::Vector3d x_axis, y_axis;
+  Eigen::Vector3d e_1(1.0, 0.0, 0.0);
+  Eigen::Vector3d e_2(0.0, 1.0, 0.0);
+  // double inner1 = e_1.dot(z_axis) / z_axis.norm();
+  // double inner2 = e_2.dot(z_axis) / z_axis.norm();
+  // if (fabs(inner1) < fabs(inner2)) {
+  //   x_axis = z_axis.cross(e_1);
+  //   x_axis = x_axis / x_axis.norm();
+  //   y_axis = z_axis.cross(x_axis);
+  //   y_axis = y_axis / y_axis.norm();
+  // } else {
+  //   x_axis = z_axis.cross(e_2);
+  //   x_axis = x_axis / x_axis.norm();
+  //   y_axis = z_axis.cross(x_axis);
+  //   y_axis = y_axis / y_axis.norm();
+  // }
+
+  x_axis = z_axis.cross(e_2);
+  x_axis = x_axis / x_axis.norm();
+  y_axis = z_axis.cross(x_axis);
+  y_axis = y_axis / y_axis.norm();
+
+  // Original method
+  // https://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process
+  // x_axis = e_1 - z_axis * z_axis.transpose() * e_1;
+  // x_axis = x_axis / x_axis.norm();
+  // y_axis = ov_core::skew_x(z_axis) * x_axis;
+  // y_axis = y_axis / y_axis.norm();
+
+  // Rotation from our global (where gravity is only along the z-axis) to the local one
+  R_GtoI.block(0, 0, 3, 1) = x_axis;
+  R_GtoI.block(0, 1, 3, 1) = y_axis;
+  R_GtoI.block(0, 2, 3, 1) = z_axis;
+}
 
 inline std::vector<std::string> split_vec(std::string str,std::string s)
 {

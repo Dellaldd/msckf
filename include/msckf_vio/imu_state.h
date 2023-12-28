@@ -28,6 +28,22 @@ struct Gt{
   Eigen::Vector3d p,vel; 
 };
 
+struct ImuData {
+
+  /// Timestamp of the reading
+  double timestamp;
+
+  /// Gyroscope reading, angular velocity (rad/s)
+  Eigen::Matrix<double, 3, 1> wm;
+
+  /// Accelerometer reading, linear acceleration (m/s^2)
+  Eigen::Matrix<double, 3, 1> am;
+
+  /// Sort function to allow for using of STL containers
+  bool operator<(const ImuData &other) const { return timestamp < other.timestamp; }
+};
+
+
 struct IMUState {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   typedef long long int StateIDType;

@@ -383,27 +383,22 @@ void MsckfVio::optisensorCallback(const mavros_msgs::VFR_HUDConstPtr &msg){
 void MsckfVio::imuCallback(
     const sensor_msgs::ImuConstPtr& msg) {
 
-  // IMU msgs are pushed backed into a buffer instead of
-  // being processed immediately. The IMU msgs are processed
-  // when the next image is available, in which way, we can
-  // easily handle the transfer delay.
-
-  if(!use_gt_initial && !is_gravity_set){
-    cout << msg->linear_acceleration.x << endl;
-    if(abs(msg->linear_acceleration.x) > 0.2)
-      return;
-  }
-
   if(!use_gt_initial){
     imu_msg_buffer.push_back(*msg);
 
+    // if (!is_gravity_set) {
+    //   if (imu_msg_buffer.size() < 200) return;
+    //   // if (imu_msg_buffer.size() < 10) return;
+    //   initializeGravityAndBias(msg);
+    //   is_gravity_set = true;
+    //   is_gt_time = true;
+    // }
+
     if (!is_gravity_set) {
-      if (imu_msg_buffer.size() < 200) return;
-      // if (imu_msg_buffer.size() < 10) return;
-      initializeGravityAndBias(msg);
-      is_gravity_set = true;
-      is_gt_time = true;
+      staticinitialize(msg);
+      
     }
+
   }else{
     // use gt 
     imu_msg_buffer.push_back(*msg);
@@ -417,9 +412,114 @@ void MsckfVio::imuCallback(
       ROS_INFO("msg_time: %f", msg->header.stamp.toSec());
     }
   }
-
-  
   return;
+}
+
+bool MsckfVio::staticinitialize(const sensor_msgs::ImuConstPtr& msg){
+  if (imu_msg_buffer.size() < 2) {
+    return false;
+  }
+  bool wait_for_jerk = true;
+  // Newest and oldest imu timestamp
+  double newesttime = imu_msg_buffer.back().header.stamp.toSec();
+  double oldesttime = imu_msg_buffer.front().header.stamp.toSec();
+
+  // Return if we don't have enough for two windows
+  if (newesttime - oldesttime < init_window_time) {
+    ROS_INFO("[init-s]: unable to select window of IMU readings, not enough readings\n");
+    return false;
+  }
+
+  std::vector<ImuData> window_1to0, window_2to1;
+  for (const auto& imu_msg : imu_msg_buffer) {
+    double time = imu_msg.header.stamp.toSec();
+    ImuData data;
+    data.timestamp = time;
+    tf::vectorMsgToEigen(imu_msg.angular_velocity, data.wm);
+    tf::vectorMsgToEigen(imu_msg.linear_acceleration, data.am);
+
+    if (time > newesttime - 0.5 * init_window_time && time <= newesttime - 0.0 * init_window_time) {
+      window_1to0.push_back(data);
+    }
+    if (time > newesttime - 1.0 * init_window_time && time <= newesttime - 0.5 * init_window_time) {
+      window_2to1.push_back(data);
+    }
+  }
+
+  // Return if both of these failed
+  if (window_1to0.size() < 2 || window_2to1.size() < 2) {
+    ROS_INFO("[init-s]: unable to select window of IMU readings, not enough readings\n");
+    return false;
+  }
+
+  Eigen::Vector3d a_avg_1to0 = Eigen::Vector3d::Zero();
+  for (const ImuData &data : window_1to0) {
+    a_avg_1to0 += data.am;
+  }
+  a_avg_1to0 /= (int)window_1to0.size();
+  double a_var_1to0 = 0;
+  for (const ImuData &data : window_1to0) {
+    a_var_1to0 += (data.am - a_avg_1to0).dot(data.am - a_avg_1to0);
+  }
+  a_var_1to0 = std::sqrt(a_var_1to0 / ((int)window_1to0.size() - 1));
+
+  Eigen::Vector3d a_avg_2to1 = Eigen::Vector3d::Zero();
+  Eigen::Vector3d w_avg_2to1 = Eigen::Vector3d::Zero();
+  for (const ImuData &data : window_2to1) {
+    a_avg_2to1 += data.am;
+    w_avg_2to1 += data.wm;
+  }
+  a_avg_2to1 = a_avg_2to1 / window_2to1.size();
+  w_avg_2to1 = w_avg_2to1 / window_2to1.size();
+  double a_var_2to1 = 0;
+
+  for (const ImuData &data : window_2to1) {
+    a_var_2to1 += (data.am - a_avg_2to1).dot(data.am - a_avg_2to1);
+  }
+  a_var_2to1 = std::sqrt(a_var_2to1 / ((int)window_2to1.size() - 1));
+
+  if (a_var_1to0 < init_imu_thresh && wait_for_jerk) {
+    ROS_INFO("[init-s]: no IMU excitation, below threshold %.3f < %.3f\n", a_var_1to0, init_imu_thresh);
+    return false;
+  }
+
+  if (a_var_2to1 > init_imu_thresh && wait_for_jerk) {
+    ROS_INFO("[init-s]: to much IMU excitation, above threshold %.3f > %.3f\n", a_var_2to1, init_imu_thresh);
+    return false;
+  }
+
+  if ((a_var_1to0 > init_imu_thresh || a_var_2to1 > init_imu_thresh) && !wait_for_jerk) {
+    ROS_INFO( "[init-s]: to much IMU excitation, above threshold %.3f,%.3f > %.3f\n", a_var_2to1, a_var_1to0,
+               init_imu_thresh);
+    return false;
+  }
+
+  Eigen::Vector3d z_axis = a_avg_2to1 / a_avg_2to1.norm();
+  Eigen::Matrix3d Ro;
+  gram_schmidt(z_axis, Ro);
+  Eigen::Vector4d q_GtoI = rot_2_quat(Ro);
+
+  // Set our biases equal to our noise (subtract our gravity from accelerometer bias)
+  Eigen::Vector3d gravity_inG;
+  gravity_inG << 0.0, 0.0, -IMUState::gravity(2);
+  Eigen::Vector3d bg = w_avg_2to1;
+  Eigen::Vector3d ba = a_avg_2to1 - quat_2_Rot(q_GtoI) * gravity_inG;
+    
+  Eigen::Quaterniond q0_i_w(q_GtoI);
+  q0_i_w.normalize();
+
+  state_server.imu_state.time = msg->header.stamp.toSec();
+  state_server.imu_state.position = Eigen::Vector3d::Zero(); // p_imu_w
+  state_server.imu_state.velocity = Eigen::Vector3d::Zero();
+  state_server.imu_state.orientation = rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
+  state_server.imu_state.gyro_bias = bg;
+  state_server.imu_state.acc_bias = ba;
+  cout << "------------- q: " << q_GtoI.transpose() << "  bg: " << bg.transpose()
+    << "  ba: " << ba.transpose() << endl;
+
+  is_gravity_set = true;
+  is_gt_time = true;
+  return true;
 }
 
 void MsckfVio::initializeGravityAndBias(const sensor_msgs::ImuConstPtr& msg) {
@@ -705,9 +805,9 @@ void MsckfVio::initialize_optiflow(){
 
   state_server.imu_state.R_imu_opti = q.toRotationMatrix();
 
-//   state_server.imu_state.R_imu_opti << 0.93937,  -0.340883,   0.037192,
-//   0.333882,   0.933972,   0.127358,
-// -0.0781504,  -0.107218,   0.991159;
+  state_server.imu_state.R_imu_opti << 0.93937,  -0.340883,   0.037192,
+  0.333882,   0.933972,   0.127358,
+-0.0781504,  -0.107218,   0.991159;
 }
 
 void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::VectorXd&r,const Eigen::MatrixXd &noise)
@@ -1612,7 +1712,6 @@ void MsckfVio::removeLostFeatures() {
   // Return if there is no lost feature to be processed.
   if (processed_feature_ids.size() == 0) return;
 
-  // has_remove_state = true;
   MatrixXd H_x = MatrixXd::Zero(jacobian_row_size,
       24+6*state_server.cam_states.size());
   VectorXd r = VectorXd::Zero(jacobian_row_size);

@@ -5,7 +5,6 @@ from mavros_msgs.msg import *
 from mavros_msgs.srv import *
 from nav_msgs.msg import Odometry
 
-import time
 from scipy.spatial.transform import Rotation as R
 import numpy as np
 import threading
@@ -13,7 +12,7 @@ from msckf_vio.msg import BiasEstiInfo
 
 class Logger:
     def __init__(self):
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/data_4/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/data_3/"
         self.f_gt = open(self.fold + "stamped_groundtruth.txt", 'w')
         self.f_gt_vel = open(self.fold + "groundtruth_velocity.txt", 'w')
         self.f_esti = open(self.fold + "stamped_traj_estimate.txt", 'w')
@@ -30,7 +29,6 @@ class Logger:
         rospy.Subscriber("/firefly_sbx/vio/odom", Odometry, self.esti_Cb)
         rospy.Subscriber("/firefly_sbx/vio/gt_odom", Odometry, self.gt_Cb)
         rospy.Subscriber("/firefly_sbx/vio/bias_esti_info", BiasEstiInfo, self.bias_Cb)
-        # rospy.Subscriber("/firefly_sbx/vio/feature_position", FeaturePositionSet, self.feature_Cb)
         self.add_thread = threading.Thread(target = self.thread_job)
         self.add_thread.start()
 

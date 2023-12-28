@@ -124,7 +124,8 @@ class MsckfVio {
      *    based on the first few IMU readings.
      */
     void initializeGravityAndBias(const sensor_msgs::ImuConstPtr& msg);
-
+    
+    bool staticinitialize(const sensor_msgs::ImuConstPtr& msg);
     /*
      * @biref resetCallback
      *    Callback function for the reset service.
@@ -223,6 +224,9 @@ class MsckfVio {
     double translation_threshold;
     double rotation_threshold;
     double tracking_rate_threshold;
+
+    double init_window_time = 2.0;
+    double init_imu_thresh = 0.4;
 
     // Ros node handle
     ros::NodeHandle nh;
