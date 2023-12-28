@@ -388,12 +388,18 @@ void MsckfVio::imuCallback(
   // when the next image is available, in which way, we can
   // easily handle the transfer delay.
 
+  if(!use_gt_initial && !is_gravity_set){
+    cout << msg->linear_acceleration.x << endl;
+    if(abs(msg->linear_acceleration.x) > 0.2)
+      return;
+  }
+
   if(!use_gt_initial){
     imu_msg_buffer.push_back(*msg);
 
     if (!is_gravity_set) {
       if (imu_msg_buffer.size() < 200) return;
-      //if (imu_msg_buffer.size() < 10) return;
+      // if (imu_msg_buffer.size() < 10) return;
       initializeGravityAndBias(msg);
       is_gravity_set = true;
       is_gt_time = true;
@@ -401,7 +407,6 @@ void MsckfVio::imuCallback(
   }else{
     // use gt 
     imu_msg_buffer.push_back(*msg);
-
     if (!is_gravity_set) {
       initializeGravityAndBias(msg);
     }
@@ -448,9 +453,13 @@ void MsckfVio::initializeGravityAndBias(const sensor_msgs::ImuConstPtr& msg) {
     double gravity_norm = gravity_imu.norm();
     IMUState::gravity = Vector3d(0.0, 0.0, -gravity_norm);
 
+    cout << "gravity_imu: " << gravity_imu.transpose() << endl;
+
     Quaterniond q0_i_w = Quaterniond::FromTwoVectors(
       gravity_imu, -IMUState::gravity);
 
+    q0_i_w.normalize();
+    ROS_ERROR("gravity_norm: %f, Q0_I_W: %f, %f ,%f ,%f", gravity_norm, q0_i_w.x(), q0_i_w.y(), q0_i_w.z(), q0_i_w.w());
     state_server.imu_state.orientation =
       rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
     return;
