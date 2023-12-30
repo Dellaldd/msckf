@@ -22,7 +22,7 @@ def quaternion_to_euler(q, degree_mode=1):
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/data_3/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/data_4/test/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  
@@ -123,9 +123,9 @@ def main():
     ax1[1][1].plot(gt[:end,0], eulers_gt[:end,1], 'r-', label = 'gt')
     ax1[1][2].plot(gt[:end,0], eulers_gt[:end,2], 'r-', label = 'gt')
     
-    # ax1[2][0].plot(gt[:end,0], gt[:end,8], 'r-', label = 'gt')
-    # ax1[2][1].plot(gt[:end,0], gt[:end,9], 'r-', label = 'gt')
-    # ax1[2][2].plot(gt[:end,0], gt[:end,10], 'r-', label = 'gt')
+    ax1[2][0].plot(gt[:end,0], gt[:end,8], 'r-', label = 'gt')
+    ax1[2][1].plot(gt[:end,0], gt[:end,9], 'r-', label = 'gt')
+    ax1[2][2].plot(gt[:end,0], gt[:end,10], 'r-', label = 'gt')
     
     ax1[2][0].plot(esti[:end,0], esti[:end,11], 'g-', label = 'opti')
     ax1[2][1].plot(esti[:end,0], esti[:end,12], 'g-', label = 'opti')

@@ -226,7 +226,7 @@ class MsckfVio {
     double tracking_rate_threshold;
 
     double init_window_time = 2.0;
-    double init_imu_thresh = 0.4;
+    double init_imu_thresh = 0.2;
 
     // Ros node handle
     ros::NodeHandle nh;
@@ -264,7 +264,7 @@ class MsckfVio {
     geometry_msgs::TransformStamped raw_mocap_odom_msg;
     Eigen::Isometry3d mocap_initial_frame;
 
-    Eigen::Vector3d prev_speed;
+    double prev_speed_z;
     bool is_first_opti = true, use_gt_initial, finish_initialize_optiflow = false;
     bool has_remove_state = false;
     std::string gt_path, gt_type;

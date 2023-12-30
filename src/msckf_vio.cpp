@@ -365,19 +365,19 @@ void MsckfVio::optisensorCallback(const mavros_msgs::VFR_HUDConstPtr &msg){
   if(!is_first_opti){
     double speed_y = msg->airspeed/1000/0.02;
     double speed_x = msg->groundspeed/1000/0.02;
-    double speed_z = (curr_pz - prev_pz)/(time - prev_time);
-    
-    Eigen::Vector3d speed = Eigen::Vector3d(speed_x, speed_y, speed_z);
+    double speed_z = (curr_pz - prev_pz)/(time - prev_time)/2;
+        
     if(speed_z == 0)
-      speed = prev_speed;
-    prev_speed = speed;
+      speed_z = prev_speed_z;
+    prev_speed_z = speed_z;
+
+    Eigen::Vector3d speed = Eigen::Vector3d(speed_x, speed_y, speed_z);
     speed_msg_buffer.push_back(make_pair(time, speed));
-    cout << "speed: " << speed.transpose() << endl;
+    // cout << "speed: " << speed.transpose() << endl;
   }
   prev_pz = curr_pz;
   prev_time = time;
   is_first_opti = false;
-  
 }
 
 void MsckfVio::imuCallback(
@@ -805,9 +805,10 @@ void MsckfVio::initialize_optiflow(){
 
   state_server.imu_state.R_imu_opti = q.toRotationMatrix();
 
-  state_server.imu_state.R_imu_opti << 0.93937,  -0.340883,   0.037192,
-  0.333882,   0.933972,   0.127358,
--0.0781504,  -0.107218,   0.991159;
+//   state_server.imu_state.R_imu_opti << 0.93937,  -0.340883,   0.037192,
+//   0.333882,   0.933972,   0.127358,
+// -0.0781504,  -0.107218,   0.991159;
+
 }
 
 void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::VectorXd&r,const Eigen::MatrixXd &noise)
@@ -951,7 +952,6 @@ void MsckfVio::optiflowProcess(){
   Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
 
   OptiflowmeasurementUpdate(H_x, r, noise);
-
   cout << "R_imu_opti: " << imu_state.R_imu_opti << endl;
 
 }
@@ -1020,7 +1020,9 @@ void MsckfVio::estiImuBias(const double time){
     opti_speed = speed_msg_buffer[id].second;
 
   imu_state.opti_speed = opti_speed;
-  cout << "opti_speed: " << opti_speed.transpose() << endl;
+  cout << "id: " << speed_msg_buffer[id].second.transpose() 
+    << " id-1: " << speed_msg_buffer[id-1].second.transpose()  << " opti_speed: " << opti_speed.transpose() << endl;
+
   // if(window.size() > 0){
   //   Eigen::Vector3d sum_opti_speed = opti_speed;
 
@@ -1677,7 +1679,7 @@ void MsckfVio::removeLostFeatures() {
     // Pass the features that are still being tracked.
     if (feature.observations.find(state_server.imu_state.id) !=
         feature.observations.end()) continue;
-    if (feature.observations.size() < 3) {
+    if (feature.observations.size() < 6) {
       invalid_feature_ids.push_back(feature.id);
       continue;
     }

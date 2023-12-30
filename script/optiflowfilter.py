@@ -25,6 +25,7 @@ class OptiFlowData:
         self.fy = 0
         self.prev_fx = 0
         self.prev_fy = 0
+        self.prev_z = 0
         self.f1_fx_out = 0
         self.f1_fy_out = 0
         self.use_height = 0
@@ -34,6 +35,7 @@ class OptiFlowData:
         self.error_y = 0
         self.f_out_x = 0
         self.f_out_y = 0
+        self.prev_vz = 0
         
 class OptiFlowFilter:
     def __init__(self):
@@ -87,28 +89,37 @@ class OptiFlowFilter:
         
         if(self.prev_time != 0):
             self.fusion()
-            
-        self.prev_time = msg.header.stamp.to_sec()
-        self.current_optiflow.prev_fx = self.current_optiflow.fx
-        self.current_optiflow.prev_fy = self.current_optiflow.fy
         
+        dt = msg.header.stamp.to_sec() - self.prev_time
         filter_vel = TwistStamped()
         filter_vel.header = msg.header
+        
+        # filter
         filter_vel.twist.linear.x = self.current_optiflow.f_out_x / 1000
         filter_vel.twist.linear.y = self.current_optiflow.f_out_y / 1000
+        
+        print(msg.header.stamp.to_sec() - self.prev_time)
+        if(msg.climb == self.current_optiflow.prev_z):
+            filter_vel.twist.linear.z = self.current_optiflow.prev_vz
+        else:
+            filter_vel.twist.linear.z = (msg.climb - self.current_optiflow.prev_z) / 1000 / dt / 2
+        
+        self.current_optiflow.prev_vz = filter_vel.twist.linear.z
+               
         self.filter_vel_pub.publish(filter_vel)
         
         no_filter_vel = TwistStamped()
         no_filter_vel.header = msg.header
         no_filter_vel.twist.linear.x = msg.groundspeed/1000/0.02
         no_filter_vel.twist.linear.y = msg.airspeed/1000/0.02
+        no_filter_vel.twist.linear.z = filter_vel.twist.linear.z
         self.vel_pub.publish(no_filter_vel)
-    
-    # def gtvelCallback(self, msg):
-    #     # msg = TwistStamped()
-    #     self.gt_velocity.time = msg.header.stamp.to_sec()
-    #     self.gt_velocity.velocity = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z])
-    
+
+        self.prev_time = msg.header.stamp.to_sec()
+        self.current_optiflow.prev_fx = self.current_optiflow.fx
+        self.current_optiflow.prev_fy = self.current_optiflow.fy
+        self.current_optiflow.prev_z = msg.climb
+            
     def lowPassFilter(self, hz, t, in_put, out_put):
         out_put += ( 1 / ( 1 + 1 / ( hz * 3.14 * t))) * (in_put - out_put)
         return out_put
@@ -151,8 +162,7 @@ class OptiFlowFilter:
         return f
       
     def fusion(self):
-        
-        
+                
         # filter
         dT = self.current_optiflow.time - self.prev_time
         flow_t1 = 1
@@ -163,22 +173,26 @@ class OptiFlowFilter:
         # self.current_imu.gyro_lpf_x = self.lowPassFilter(8.0, dT, self.current_imu.gyro[0], self.current_imu.gyro_lpf_x)
         # self.current_imu.gyro_lpf_y = self.lowPassFilter(8.0, dT, self.current_imu.gyro[1], self.current_imu.gyro_lpf_y)
           
-        self.current_optiflow.fx = self.lowPassFilter(30.0, dT, self.current_optiflow.fx, self.current_optiflow.prev_fx)
-        self.current_optiflow.fy = self.lowPassFilter(30.0, dT, self.current_optiflow.fy, self.current_optiflow.prev_fy)
+        # self.current_optiflow.fx = self.lowPassFilter(30.0, dT, self.current_optiflow.fx, self.current_optiflow.prev_fx)
+        # self.current_optiflow.fy = self.lowPassFilter(30.0, dT, self.current_optiflow.fy, self.current_optiflow.prev_fy)
                 
         # # # 光流补偿，补偿后单位为mm/s        
-        fx_gyro_fix = ((self.current_optiflow.fx  + self.limit(((self.current_imu.gyro_lpf_x)),-flow_t1,flow_t1)) * 10 * self.current_optiflow.use_height ) ;  #rotation compensation
-        fy_gyro_fix = ((self.current_optiflow.fy  + self.limit(((-self.current_imu.gyro_lpf_y)),-flow_t1,flow_t1)) * 10 * self.current_optiflow.use_height ) ;  #rotation compensation
+        # fx_gyro_fix = ((self.current_optiflow.fx  + self.limit(((self.current_imu.gyro_lpf_x)),-flow_t1,flow_t1)) * 10 * self.current_optiflow.use_height ) ;  #rotation compensation
+        # fy_gyro_fix = ((self.current_optiflow.fy  + self.limit(((-self.current_imu.gyro_lpf_y)),-flow_t1,flow_t1)) * 10 * self.current_optiflow.use_height ) ;  #rotation compensation
+
+        # 不做光流补偿
+        fx_gyro_fix = (self.current_optiflow.fx * 10 * self.current_optiflow.use_height ) #rotation compensation
+        fy_gyro_fix = (self.current_optiflow.fy * 10 * self.current_optiflow.use_height ) #rotation compensation
         
         
-        # # 消除pitch 和 roll的影响 计算在水平平面中加速度的大小
+        # # # 消除pitch 和 roll的影响 计算在水平平面中加速度的大小
         heading_coordinate_acc = self.vec_3d_transition(self.current_imu.acc) # 将单位转为mm/s^2
         
-        # # 利用加速度计测出的结果 计算当前的光流速度
+        # # # 利用加速度计测出的结果 计算当前的光流速度
         self.current_optiflow.f1_fx_out += heading_coordinate_acc[0] * dT # 单位为mm/s
         self.current_optiflow.f1_fy_out += heading_coordinate_acc[1] * dT
                 
-        # # 将光流补偿后的速度和加速度计算出来的速度做互补滤波
+        # # # 将光流补偿后的速度和加速度计算出来的速度做互补滤波
         f1_b = 10
         f1_g = 2.5
         self.current_optiflow.f1_fx_out, self.current_optiflow.a_x = self.filter_1(f1_b, f1_g, dT, fx_gyro_fix, self.current_optiflow.f1_fx_out, self.current_optiflow.a_x)
@@ -188,18 +202,18 @@ class OptiFlowFilter:
         self.current_optiflow.f_out_y = self.current_optiflow.f1_fy_out
                        
         # # 融合速度二次修正，最终输出结果
-        self.current_optiflow.f_out_x = 0.9 * (self.current_optiflow.f1_fx_out + 0.1 * self.current_optiflow.error_x) + 0.1 * self.current_optiflow.f_out_x
-        self.current_optiflow.f_out_y = 0.9 * (self.current_optiflow.f1_fy_out + 0.1 * self.current_optiflow.error_y) + 0.1 * self.current_optiflow.f_out_y
+        # self.current_optiflow.f_out_x = self.current_optiflow.f1_fx_out + 0.1 * self.current_optiflow.error_x
+        # self.current_optiflow.f_out_y = self.current_optiflow.f1_fy_out + 0.1 * self.current_optiflow.error_y
         
-        self.current_optiflow.error_x += (fx_gyro_fix - self.current_optiflow.f_out_x) * dT
-        self.current_optiflow.error_y += (fy_gyro_fix - self.current_optiflow.f_out_y) * dT
+        # self.current_optiflow.error_x += (fx_gyro_fix - self.current_optiflow.f_out_x) * dT
+        # self.current_optiflow.error_y += (fy_gyro_fix - self.current_optiflow.f_out_y) * dT
         
-        print("x: ", self.current_optiflow.f_out_x/1000, fx_gyro_fix/1000)
-        print("y: ", self.current_optiflow.f_out_y/1000, fy_gyro_fix/1000)
+        # print("x: ", self.current_optiflow.f_out_x/1000, fx_gyro_fix/1000)
+        # print("y: ", self.current_optiflow.f_out_y/1000, fy_gyro_fix/1000)
         
         # 这里为什么不需要将修正后的结果赋值给f_out_x？ 下一次计算当前的光流速度用修正后的速度？
-        self.current_optiflow.f1_fx_out = self.current_optiflow.f_out_x
-        self.current_optiflow.f1_fy_out = self.current_optiflow.f_out_y
+        # self.current_optiflow.f1_fx_out = self.current_optiflow.f_out_x
+        # self.current_optiflow.f1_fy_out = self.current_optiflow.f_out_y
         
         #  use pi control
         # kp_x = 0.01
