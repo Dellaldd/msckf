@@ -20,13 +20,15 @@ def quaternion_to_euler(q, degree_mode=1):
     return euler
 
 def main():
-    bagname = "v101"
-    noisetype = "noise_0_1"
+    bagname = "v103"
+    noisetype = "observe"
     foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/" + bagname + "/" + noisetype + "/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
+    if_use_speed_gt = False
     
-    speed_path = "/home/ldd/msckf_ws/src/msckf_vio/dataset/" + bagname + "/" + noisetype + "/opti_speed.txt"
-    speed_gt_path = "/home/ldd/msckf_ws/src/msckf_vio/dataset/" + bagname + "/" + "no_noise/opti_speed.txt"
+    if if_use_speed_gt:
+        speed_path = "/home/ldd/msckf_ws/src/msckf_vio/dataset/" + bagname + "/" + noisetype + "/opti_speed.txt"
+        speed_gt_path = "/home/ldd/msckf_ws/src/msckf_vio/dataset/" + bagname + "/" + "no_noise/opti_speed.txt"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  
     esti_path = foldpath + "traj_estimate_velocity.txt"
@@ -45,8 +47,9 @@ def main():
     msckf = np.loadtxt(msckf_path, delimiter=' ', skiprows=1)
     msckf_bias = np.loadtxt(msckf_bias_path, delimiter=' ', skiprows=1)
     
-    speed = np.loadtxt(speed_path, delimiter=' ', skiprows=1)
-    speed_gt = np.loadtxt(speed_gt_path, delimiter=' ', skiprows=1)
+    if if_use_speed_gt:
+        speed = np.loadtxt(speed_path, delimiter=' ', skiprows=1)
+        speed_gt = np.loadtxt(speed_gt_path, delimiter=' ', skiprows=1)
     
     print(gt.shape)
     eulers = []
@@ -118,13 +121,14 @@ def main():
     ax1[1][1].plot(gt[:end,0], eulers_gt[:end,1], 'r-', label = 'gt')
     ax1[1][2].plot(gt[:end,0], eulers_gt[:end,2], 'r-', label = 'gt')
     
-    ax1[2][0].plot(speed_gt[:,0]*1e-9, speed_gt[:,1], 'r-', label = 'gt')
-    ax1[2][1].plot(speed_gt[:,0]*1e-9, speed_gt[:,2], 'r-', label = 'gt')
-    ax1[2][2].plot(speed_gt[:,0]*1e-9, speed_gt[:,3], 'r-', label = 'gt')
-    
-    ax1[2][0].plot(speed[:,0]*1e-9, speed[:,1], 'g-', label = 'speed_noise')
-    ax1[2][1].plot(speed[:,0]*1e-9, speed[:,2], 'g-', label = 'speed_noise')
-    ax1[2][2].plot(speed[:,0]*1e-9, speed[:,3], 'g-', label = 'speed_noise')
+    if if_use_speed_gt:
+        ax1[2][0].plot(speed_gt[:,0]*1e-9, speed_gt[:,1], 'r-', label = 'gt')
+        ax1[2][1].plot(speed_gt[:,0]*1e-9, speed_gt[:,2], 'r-', label = 'gt')
+        ax1[2][2].plot(speed_gt[:,0]*1e-9, speed_gt[:,3], 'r-', label = 'gt')
+        
+        ax1[2][0].plot(speed[:,0]*1e-9, speed[:,1], 'g-', label = 'speed_noise')
+        ax1[2][1].plot(speed[:,0]*1e-9, speed[:,2], 'g-', label = 'speed_noise')
+        ax1[2][2].plot(speed[:,0]*1e-9, speed[:,3], 'g-', label = 'speed_noise')
     
     # ax1[2][0].plot(msckf[:end,0], msckf[:end,8], 'y-', label = 'msckf')
     # ax1[2][1].plot(msckf[:end,0], msckf[:end,9], 'y-', label = 'msckf')
