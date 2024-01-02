@@ -128,7 +128,6 @@ bool MsckfVio::loadParameters() {
     }
   }
     
-
     // euroc v1
     if(gt_type == "eurocv1"){
       s_gt = " ";
@@ -751,32 +750,77 @@ void MsckfVio::optiflowProcess(){
 
   IMUState &imu_state = state_server.imu_state;
   H_x.block<3,3>(0,6) = imu_state.R_vio_opti;// q bg v ba p
-  H_x.block<3,3>(0,21) = -skewSymmetric(imu_state.R_vio_opti * imu_state.velocity);
+  H_x.block<3,3>(0,21) = skewSymmetric(imu_state.R_vio_opti * imu_state.velocity);
   r.segment<3>(0) = imu_state.opti_speed - imu_state.R_vio_opti * imu_state.velocity;
   Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
 
   // observability
-  Eigen::MatrixXd H_x_imu = H_x;
-  Eigen::VectorXd u = Eigen::VectorXd::Zero(24+6*state_server.cam_states.size());
+  // Eigen::MatrixXd H_x_imu = H_x;
+  // Eigen::VectorXd u = Eigen::VectorXd::Zero(24+6*state_server.cam_states.size());
 
-  u.segment<3>(0) = quaternionToRotation(imu_state.orientation_null) * IMUState::gravity;
-  u.segment<3>(6) = -skewSymmetric(imu_state.velocity_null) * IMUState::gravity; // R_w_i
-  u.segment<3>(12) = -skewSymmetric(imu_state.position_null) * IMUState::gravity;
-  u.segment<3>(21) = imu_state.R_vio_opti * IMUState::gravity;
+  // u.segment<3>(0) = quaternionToRotation(imu_state.orientation_null) * IMUState::gravity;
+  // u.segment<3>(6) = -skewSymmetric(imu_state.velocity_null) * IMUState::gravity; // R_w_i
+  // u.segment<3>(12) = -skewSymmetric(imu_state.position_null) * IMUState::gravity;
+  // u.segment<3>(21) = imu_state.R_vio_opti * IMUState::gravity;
 
-  auto cam_state_iter = state_server.cam_states.begin();
-  for (int i = 0; i < state_server.cam_states.size(); ++i, ++cam_state_iter) {
-    u.segment<3>(24 + i * 6) = quaternionToRotation(cam_state_iter->second.orientation_null) * IMUState::gravity; // R_w_c
-    u.segment<3>(27 + i * 6) = -skewSymmetric(cam_state_iter->second.position_null) * IMUState::gravity;
-  }
+  // auto cam_state_iter = state_server.cam_states.begin();
+  // for (int i = 0; i < state_server.cam_states.size(); ++i, ++cam_state_iter) {
+  //   u.segment<3>(24 + i * 6) = quaternionToRotation(cam_state_iter->second.orientation_null) * IMUState::gravity; // R_w_c
+  //   u.segment<3>(27 + i * 6) = -skewSymmetric(cam_state_iter->second.position_null) * IMUState::gravity;
+  // }
   
+  // Eigen::MatrixXd H_ = H_x_imu - H_x_imu * u * (u.transpose() * u).inverse() * u.transpose();
+  // H_x = H_;
+
+  // part observalibity
+  Eigen::MatrixXd H_x_imu = Eigen::MatrixXd::Zero(3,6);
+  H_x_imu.block<3,3>(0,0) = H_x.block<3,3>(0,6);
+  H_x_imu.block<3,3>(0,3) = H_x.block<3,3>(0,21);
+
+  Eigen::VectorXd u = Eigen::VectorXd::Zero(6);
+  u.segment<3>(0) = skewSymmetric(imu_state.velocity_null) * IMUState::gravity;
+  u.segment<3>(3) = -imu_state.R_vio_opti * IMUState::gravity;
   Eigen::MatrixXd H_ = H_x_imu - H_x_imu * u * (u.transpose() * u).inverse() * u.transpose();
-  H_x = H_;
+ 
+  H_x.block<3,3>(0,6) = H_.block<3,3>(0,0);
+  H_x.block<3,3>(0,21) = H_.block<3,3>(0,3);
  
   OptiflowmeasurementUpdate(H_x, r, noise);
 }
 
 void MsckfVio::estiImuBias(const double time){
+
+  Eigen::Vector3d vel = Eigen::Vector3d::Zero();
+  int num = gt_num;
+  while(num < gt_poses.size()){
+    if (gt_poses[num].time <= state_server.imu_state.time){
+        num ++;
+    }else{
+        break;
+    }
+  }
+
+  if(num > 1){
+    int prev_num = num - 1;
+    int next_num = num + 1;
+    double prev_time = gt_poses[prev_num].time;
+    double curr_time = gt_poses[next_num].time;
+    Eigen::Vector3d prev_p = gt_poses[prev_num].p;
+    Eigen::Vector3d curr_p = gt_poses[next_num].p;
+
+    // while(curr_time - prev_time < 1e-2 && prev_num > 0){
+    //   prev_num--;
+    //   prev_time = gt_poses[prev_num].time;
+    //   prev_p = gt_poses[prev_num].p;
+    // }
+
+    vel = (curr_p - prev_p) / (curr_time - prev_time);
+  }
+  state_server.imu_state.opti_speed = vel;
+
+  cout << "speed_msg_buffer.size(): " << speed_msg_buffer.size() << endl;
+  if(speed_msg_buffer.size() <= 0)
+    return;
 
   IMUState& imu_state = state_server.imu_state;
   int used_msg = 0;
@@ -816,6 +860,8 @@ void MsckfVio::estiImuBias(const double time){
 
   speed_msg_buffer.erase(speed_msg_buffer.begin(),
       speed_msg_buffer.begin()+used_msg);
+  
+
 
   // OPTIMIZE
   // imu_state.m_acc_set.clear();

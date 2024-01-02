@@ -21,13 +21,13 @@ def quaternion_to_euler(q, degree_mode=1):
 
 def main():
     bagname = "v103"
-    noisetype = "observe"
+    noisetype = "noise_0_1"
     foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/" + bagname + "/" + noisetype + "/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
-    if_use_speed_gt = False
+    if_use_speed_gt = True
     
     if if_use_speed_gt:
-        speed_path = "/home/ldd/msckf_ws/src/msckf_vio/dataset/" + bagname + "/" + noisetype + "/opti_speed.txt"
+        speed_path = "/home/ldd/msckf_ws/src/msckf_vio/dataset/" + bagname + "/" + "noise_0_1" + "/opti_speed.txt"
         speed_gt_path = "/home/ldd/msckf_ws/src/msckf_vio/dataset/" + bagname + "/" + "no_noise/opti_speed.txt"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  

@@ -60,22 +60,29 @@
       <remap from="~optiflow" to="/noise_speed"/>
 
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v101/gt.txt"/>
-      <param name="gt_type" value="euroc"/> -->
+      <param name="gt_type" value="eurocv1"/>
+      <remap from="~optiflow" to="/noise_speed1"/> -->
       
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v102/gt.txt"/>
       <param name="gt_type" value="euroc"/> -->
 
-      <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v103/gt.txt"/>
-      <param name="gt_type" value="euroc"/> -->
+      <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v103/gt.txt"/>
+      <param name="gt_type" value="euroc"/>
 
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v201/gt.txt"/>
-      <param name="gt_type" value="euroc"/> -->
+      <param name="gt_type" value="euroc"/>  -->
 
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v202/gt.txt"/>
       <param name="gt_type" value="euroc"/> -->
 
-      <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v103/gt.txt"/>
-      <param name="gt_type" value="euroc"/> 
+      <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v203/gt.txt"/>
+      <param name="gt_type" value="euroc"/>      -->
+
+      <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/mh01/gt.txt"/>
+      <param name="gt_type" value="euroc"/>  -->
+
+      <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/mh02/gt.txt"/>
+      <param name="gt_type" value="euroc"/>  -->
 
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/mh03/gt.txt"/>
       <param name="gt_type" value="euroc"/>  -->
