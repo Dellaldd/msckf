@@ -4,6 +4,8 @@ from sensor_msgs.msg import Imu
 from mavros_msgs.msg import VFR_HUD
 from geometry_msgs.msg import TwistStamped
 import threading
+from tf.transformations import euler_from_quaternion, euler_matrix
+from scipy.spatial.transform import Rotation as R
 
 class GtvelData:
     def __init__(self):
@@ -17,6 +19,7 @@ class ImuData:
         self.gyro = np.zeros((3,1))
         self.gyro_lpf_y = 0
         self.gyro_lpf_x = 0
+        self.orien_ahrs = []
 
 class OptiFlowData:
     def __init__(self):
@@ -26,6 +29,7 @@ class OptiFlowData:
         self.prev_fx = 0
         self.prev_fy = 0
         self.prev_z = 0
+        self.prev_vz = 0
         self.f1_fx_out = 0
         self.f1_fy_out = 0
         self.use_height = 0
@@ -35,7 +39,7 @@ class OptiFlowData:
         self.error_y = 0
         self.f_out_x = 0
         self.f_out_y = 0
-        self.prev_vz = 0
+        
         
 class OptiFlowFilter:
     def __init__(self):
@@ -50,6 +54,9 @@ class OptiFlowFilter:
         self.gt_velocity = GtvelData()
         self.prev_time = 0
         
+        self.is_first_imu = True
+        self.yaw = 0
+        
         self.add_thread = threading.Thread(target = self.thread_job)
         self.add_thread.start()
     
@@ -61,7 +68,7 @@ class OptiFlowFilter:
         self.current_imu.time = msg.header.stamp.to_sec()
         self.current_imu.acc = np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
         self.current_imu.gyro = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
-
+        self.current_imu.orien_ahrs = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
         
     def optiflowCallback(self, msg):
         # msg = VFR_HUD()
@@ -72,20 +79,6 @@ class OptiFlowFilter:
         
         self.current_optiflow.use_height = flow_height
         
-        # if(flow_height<200):    # input height (cm/s) ?
-        #     self.current_optiflow.use_height = 100
-        # elif(flow_height<300):
-        #     self.current_optiflow.use_height = 150
-        # elif(flow_height<400):
-        #     self.current_optiflow.use_height = 200
-        # elif(flow_height<500):
-        #     self.current_optiflow.use_height = 250
-        # elif(flow_height<600):
-        #     self.current_optiflow.use_height = 300
-        # elif(flow_height<1000):
-        #     self.current_optiflow.use_height = 350
-        # else: 
-        #     self.current_optiflow.use_height = 400
         
         if(self.prev_time != 0):
             self.fusion()
@@ -98,11 +91,12 @@ class OptiFlowFilter:
         filter_vel.twist.linear.x = self.current_optiflow.f_out_x / 1000
         filter_vel.twist.linear.y = self.current_optiflow.f_out_y / 1000
         
-        print(msg.header.stamp.to_sec() - self.prev_time)
         if(msg.climb == self.current_optiflow.prev_z):
             filter_vel.twist.linear.z = self.current_optiflow.prev_vz
         else:
-            filter_vel.twist.linear.z = (msg.climb - self.current_optiflow.prev_z) / 1000 / dt / 2
+            filter_vel.twist.linear.z = (msg.climb - self.current_optiflow.prev_z) / 1000 / dt / 2 /0.6
+            # filter
+            filter_vel.twist.linear.z = 0.5 * filter_vel.twist.linear.z + 0.5 * self.current_optiflow.prev_vz
         
         self.current_optiflow.prev_vz = filter_vel.twist.linear.z
                
@@ -136,10 +130,26 @@ class OptiFlowFilter:
         # ((x) < (min)) ? (min) : ( ((x) > (max))? (max) : (x) )
     
     def vec_3d_transition(self, acc):
-        heading_coordinate_acc = acc
-        heading_coordinate_acc[0] = heading_coordinate_acc[0] * 1000
-        heading_coordinate_acc[1] = - heading_coordinate_acc[1] * 1000
-        heading_coordinate_acc[2] = - heading_coordinate_acc[2] * 1000
+        if(self.is_first_imu):
+            euler = R.from_quat(self.current_imu.orien_ahrs).as_euler('ZYX')
+            self.yaw = euler[0]
+            self.is_first_imu = False
+            
+        euler = R.from_quat(self.current_imu.orien_ahrs).as_euler('ZYX')
+        # print("before: ", euler / np.pi * 180, "yaw: ", self.yaw)
+        euler[0] = euler[0] - self.yaw
+        # print("after: ", euler / np.pi * 180)
+        R_b_w = R.from_euler('ZYX', euler).as_matrix()
+        enu_acc = np.ones((3,1))
+        enu_acc[0] = acc[0] * 1000
+        enu_acc[1] = - acc[1] * 1000
+        enu_acc[2] = - acc[2] * 1000
+        print(R_b_w)
+        # heading_coordinate_acc = np.dot(np.linalg.inv(R_b_w), np.array(enu_acc))
+        
+        heading_coordinate_acc = np.dot(R_b_w, np.array(enu_acc))
+        print("enu_acc: ", enu_acc.T/1000 ,"heading_coordinate_acc: ", heading_coordinate_acc.T/1000)
+        
         return heading_coordinate_acc
     
     def safe_div(self, numerator,denominator,safe_value):
@@ -165,7 +175,7 @@ class OptiFlowFilter:
                 
         # filter
         dT = self.current_optiflow.time - self.prev_time
-        flow_t1 = 1
+        flow_t1 = 0.1
                 
         self.current_imu.gyro_lpf_x = self.current_imu.gyro[0]
         self.current_imu.gyro_lpf_y = self.current_imu.gyro[1]
@@ -178,7 +188,7 @@ class OptiFlowFilter:
                 
         # # # 光流补偿，补偿后单位为mm/s        
         # fx_gyro_fix = ((self.current_optiflow.fx  + self.limit(((self.current_imu.gyro_lpf_x)),-flow_t1,flow_t1)) * 10 * self.current_optiflow.use_height ) ;  #rotation compensation
-        # fy_gyro_fix = ((self.current_optiflow.fy  + self.limit(((-self.current_imu.gyro_lpf_y)),-flow_t1,flow_t1)) * 10 * self.current_optiflow.use_height ) ;  #rotation compensation
+        # fy_gyro_fix = ((self.current_optiflow.fy  - self.limit(((-self.current_imu.gyro_lpf_y)),-flow_t1,flow_t1)) * 10 * self.current_optiflow.use_height ) ;  #rotation compensation
 
         # 不做光流补偿
         fx_gyro_fix = (self.current_optiflow.fx * 10 * self.current_optiflow.use_height ) #rotation compensation
@@ -193,10 +203,13 @@ class OptiFlowFilter:
         self.current_optiflow.f1_fy_out += heading_coordinate_acc[1] * dT
                 
         # # # 将光流补偿后的速度和加速度计算出来的速度做互补滤波
-        f1_b = 10
-        f1_g = 2.5
-        self.current_optiflow.f1_fx_out, self.current_optiflow.a_x = self.filter_1(f1_b, f1_g, dT, fx_gyro_fix, self.current_optiflow.f1_fx_out, self.current_optiflow.a_x)
-        self.current_optiflow.f1_fy_out, self.current_optiflow.a_y = self.filter_1(f1_b, f1_g, dT, fy_gyro_fix, self.current_optiflow.f1_fy_out, self.current_optiflow.a_y)
+        f1_b_x = 5
+        f1_g_x = 2.5
+        
+        f1_b_y = 5
+        f1_g_y = 2.5
+        self.current_optiflow.f1_fx_out, self.current_optiflow.a_x = self.filter_1(f1_b_x, f1_g_x, dT, fx_gyro_fix, self.current_optiflow.f1_fx_out, self.current_optiflow.a_x)
+        self.current_optiflow.f1_fy_out, self.current_optiflow.a_y = self.filter_1(f1_b_y, f1_g_y, dT, fy_gyro_fix, self.current_optiflow.f1_fy_out, self.current_optiflow.a_y)
         
         self.current_optiflow.f_out_x = self.current_optiflow.f1_fx_out
         self.current_optiflow.f_out_y = self.current_optiflow.f1_fy_out
@@ -207,11 +220,8 @@ class OptiFlowFilter:
         
         # self.current_optiflow.error_x += (fx_gyro_fix - self.current_optiflow.f_out_x) * dT
         # self.current_optiflow.error_y += (fy_gyro_fix - self.current_optiflow.f_out_y) * dT
-        
-        # print("x: ", self.current_optiflow.f_out_x/1000, fx_gyro_fix/1000)
-        # print("y: ", self.current_optiflow.f_out_y/1000, fy_gyro_fix/1000)
-        
-        # 这里为什么不需要将修正后的结果赋值给f_out_x？ 下一次计算当前的光流速度用修正后的速度？
+                
+        # # 这里为什么不需要将修正后的结果赋值给f_out_x？ 下一次计算当前的光流速度用修正后的速度？
         # self.current_optiflow.f1_fx_out = self.current_optiflow.f_out_x
         # self.current_optiflow.f1_fy_out = self.current_optiflow.f_out_y
         

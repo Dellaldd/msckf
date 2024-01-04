@@ -56,9 +56,10 @@
 
       <remap from="~imu" to="/mavros/imu/full"/>
       <remap from="~features" to="/firefly_sbx/image_processor/features"/>
-      <remap from="~optisensor" to="/mavros/vfr_hud"/>
+      <remap from="~optisensor" to="/mavros/vfr_hud1"/>
+      <remap from="~optitrack" to="/filter_velocity"/>
       <!-- <remap from="~optitrack" to="/outer_velocity1"/> -->
-      <remap from="~optitrack" to="/filter_velocity1"/>
+      
 
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v101/gt.txt"/>
       <param name="gt_type" value="euroc"/> -->
@@ -87,7 +88,7 @@
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/mh05/gt.txt"/>
       <param name="gt_type" value="euroc"/>  -->
 
-      <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_4/gt.txt"/>
+      <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_3_6/gt.txt"/>
       <param name="gt_type" value="real"/> 
 
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_12_22_2/gt.txt"/>

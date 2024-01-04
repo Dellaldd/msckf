@@ -365,7 +365,7 @@ void MsckfVio::optisensorCallback(const mavros_msgs::VFR_HUDConstPtr &msg){
   if(!is_first_opti){
     double speed_y = msg->airspeed/1000/0.02;
     double speed_x = msg->groundspeed/1000/0.02;
-    double speed_z = (curr_pz - prev_pz)/(time - prev_time)/2;
+    double speed_z = (curr_pz - prev_pz)/(time - prev_time)/2/0.6;
         
     if(speed_z == 0)
       speed_z = prev_speed_z;
@@ -803,9 +803,9 @@ void MsckfVio::initialize_optiflow(){
   
   cout << "q_imu_opti: " << q.toRotationMatrix() << endl;
 
-  state_server.imu_state.R_imu_opti = q.toRotationMatrix();
+  state_server.imu_state.R_vio_opti = q.toRotationMatrix();
 
-//   state_server.imu_state.R_imu_opti << 0.93937,  -0.340883,   0.037192,
+//   state_server.imu_state.R_vio_opti << 0.93937,  -0.340883,   0.037192,
 //   0.333882,   0.933972,   0.127358,
 // -0.0781504,  -0.107218,   0.991159;
 
@@ -905,8 +905,8 @@ void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::V
           smallAngleQuaternion(delta_x_imu.segment<3>(21));
   // cout << "dq_extrinsic_opti: " << delta_x_imu.segment<3>(15) << endl;
 
-  state_server.imu_state.R_imu_opti = quaternionToRotation(
-              dq_extrinsic_opti) * state_server.imu_state.R_imu_opti;
+  state_server.imu_state.R_vio_opti = quaternionToRotation(
+              dq_extrinsic_opti) * state_server.imu_state.R_vio_opti;
 
   // Update the camera states.
   auto cam_state_iter = state_server.cam_states.begin();
@@ -940,20 +940,26 @@ void MsckfVio::optiflowProcess(){
 
   IMUState &imu_state = state_server.imu_state;
 
-  H_x.block<3,3>(0,6) = imu_state.R_imu_opti;// q bg v ba p
-  H_x.block<3,3>(0,21) = -skewSymmetric(imu_state.R_imu_opti * imu_state.velocity);
-
-  // H_x.block<3,3>(0,6) = Eigen::Matrix3d::Identity();// q bg v ba p
-
-  r.segment<3>(0) = imu_state.opti_speed - imu_state.R_imu_opti * imu_state.velocity;
-  cout << "r: " << r.transpose() << " opti: " << imu_state.opti_speed.transpose() 
-    << " vel: " << imu_state.velocity.transpose() << endl;
-
+  H_x.block<3,3>(0,6) = imu_state.R_vio_opti;// q bg v ba p
+  H_x.block<3,3>(0,21) = skewSymmetric(imu_state.R_vio_opti * imu_state.velocity);
+  r.segment<3>(0) = imu_state.opti_speed - imu_state.R_vio_opti * imu_state.velocity;
   Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
 
-  OptiflowmeasurementUpdate(H_x, r, noise);
-  cout << "R_imu_opti: " << imu_state.R_imu_opti << endl;
+  // part observalibity
+  Eigen::MatrixXd H_x_imu = Eigen::MatrixXd::Zero(3,6);
+  H_x_imu.block<3,3>(0,0) = H_x.block<3,3>(0,6);
+  H_x_imu.block<3,3>(0,3) = H_x.block<3,3>(0,21);
 
+  Eigen::VectorXd u = Eigen::VectorXd::Zero(6);
+  u.segment<3>(0) = skewSymmetric(imu_state.velocity_null) * IMUState::gravity;
+  u.segment<3>(3) = -imu_state.R_vio_opti * IMUState::gravity;
+  Eigen::MatrixXd H_ = H_x_imu - H_x_imu * u * (u.transpose() * u).inverse() * u.transpose();
+ 
+  H_x.block<3,3>(0,6) = H_.block<3,3>(0,0);
+  H_x.block<3,3>(0,21) = H_.block<3,3>(0,3);
+  
+  OptiflowmeasurementUpdate(H_x, r, noise);
+  cout << "R_vio_opti: " << imu_state.R_vio_opti << endl;
 }
 
 void MsckfVio::estiImuBias(const double time){
@@ -1615,8 +1621,8 @@ void MsckfVio::measurementUpdate(
           smallAngleQuaternion(delta_x_imu.segment<3>(21));
   // cout << "dq_extrinsic_opti: " << delta_x_imu.segment<3>(15) << endl;
 
-  state_server.imu_state.R_imu_opti = quaternionToRotation(
-              dq_extrinsic_opti) * state_server.imu_state.R_imu_opti;
+  state_server.imu_state.R_vio_opti = quaternionToRotation(
+              dq_extrinsic_opti) * state_server.imu_state.R_vio_opti;
 
   // Update the camera states.
   auto cam_state_iter = state_server.cam_states.begin();
@@ -2127,6 +2133,7 @@ void MsckfVio::publish(const ros::Time& time) {
     //   prev_num--;
     //   prev_time = gt_poses[prev_num].time;
     // }
+
     Eigen::Vector3d prev_p = gt_poses[prev_num].p;
     Eigen::Vector3d curr_p = gt_poses[next_num].p;
     
