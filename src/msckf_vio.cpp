@@ -64,10 +64,6 @@ MsckfVio::MsckfVio(ros::NodeHandle& pnh):
 }
 
 bool MsckfVio::loadParameters() {
-  state_server.imu_state.gyro_bias = Eigen::Vector3d(-0.002341, 0.021815, 0.076602);
-  // state_server.imu_state.gyro_bias = Eigen::Vector3d(-0.002153, 0.020744, 0.075806);
-  // state_server.imu_state.gyro_bias = Eigen::Vector3d(-0.0546303, 0.0208792, 0.094797);
-
 
   // gt
   ifstream ifs_gt;
@@ -76,6 +72,7 @@ bool MsckfVio::loadParameters() {
   nh.param<string>("gt_path", gt_path, "/home/ldd/euroc/V1_01_easy/mav0/state_groundtruth_estimate0/V1_01_easy.txt");
   nh.param<string>("gt_type", gt_type, "euroc");
   nh.param<bool>("use_gt_initial", use_gt_initial, true);
+  nh.param<double>("dt_imu_opti", dt_imu_opti, 0);
   
 
   // gravity
@@ -514,7 +511,7 @@ bool MsckfVio::staticinitialize(const sensor_msgs::ImuConstPtr& msg){
   state_server.imu_state.orientation = rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
   state_server.imu_state.gyro_bias = bg;
   state_server.imu_state.acc_bias = ba;
-  cout << "------------- q: " << q_GtoI.transpose() << "  bg: " << bg.transpose()
+  cout << "------------- q: " << state_server.imu_state.orientation.transpose() << "  bg: " << bg.transpose()
     << "  ba: " << ba.transpose() << endl;
 
   is_gravity_set = true;
@@ -804,7 +801,7 @@ void MsckfVio::initialize_optiflow(){
   cout << "q_imu_opti: " << q.toRotationMatrix() << endl;
 
   state_server.imu_state.R_vio_opti = q.toRotationMatrix();
-
+  state_server.imu_state.R_vio_opti = Eigen::Matrix3d::Identity();
 //   state_server.imu_state.R_vio_opti << 0.93937,  -0.340883,   0.037192,
 //   0.333882,   0.933972,   0.127358,
 // -0.0781504,  -0.107218,   0.991159;
@@ -943,7 +940,7 @@ void MsckfVio::optiflowProcess(){
   H_x.block<3,3>(0,6) = imu_state.R_vio_opti;// q bg v ba p
   H_x.block<3,3>(0,21) = skewSymmetric(imu_state.R_vio_opti * imu_state.velocity);
   r.segment<3>(0) = imu_state.opti_speed - imu_state.R_vio_opti * imu_state.velocity;
-  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
+  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.5;
 
   // part observalibity
   Eigen::MatrixXd H_x_imu = Eigen::MatrixXd::Zero(3,6);
@@ -958,8 +955,13 @@ void MsckfVio::optiflowProcess(){
   H_x.block<3,3>(0,6) = H_.block<3,3>(0,0);
   H_x.block<3,3>(0,21) = H_.block<3,3>(0,3);
   
-  OptiflowmeasurementUpdate(H_x, r, noise);
   cout << "R_vio_opti: " << imu_state.R_vio_opti << endl;
+  use_imu_num = r.norm();
+  ROS_INFO("R_ERROR: %f, %f, %f", r(0), r(1), r(2));
+
+  if(r.norm() < 0.1)
+    OptiflowmeasurementUpdate(H_x, r, noise);
+  
 }
 
 void MsckfVio::estiImuBias(const double time){
@@ -998,36 +1000,47 @@ void MsckfVio::estiImuBias(const double time){
 
   IMUState& imu_state = state_server.imu_state;
   int used_msg = 0;
-  double time_bound = imu_state.time;
+  double time_bound = imu_state.time + dt_imu_opti;
+  double thres_time = time + dt_imu_opti;
+
   int id = 0;
+  bool msg_is_big = false;
   for(; id < speed_msg_buffer.size(); id++){
     double msg_time = speed_msg_buffer[id].first;
+    ROS_INFO("id: %d, use_time: %f, time_bound: %f, time_thres: %f", id, 
+      msg_time, time_bound, thres_time);
     if (msg_time < time_bound) {
       ++used_msg;
       continue;
     }
 
-    if (msg_time > time) {
+    if (msg_time > thres_time) {
+      msg_is_big = true;
       break;
     }  
     ++used_msg;
   }
+
+  if(!msg_is_big)
+    id --;
 
   // linear 
   Eigen::Vector3d opti_speed;
   if(id > 0){
     Eigen::Vector3d prev_speed = speed_msg_buffer[id-1].second;
     double prev_time = speed_msg_buffer[id-1].first;
-
     Eigen::Vector3d curr_speed = speed_msg_buffer[id].second;
     double curr_time = speed_msg_buffer[id].first;
-    opti_speed = prev_speed + (curr_speed - prev_speed) / (curr_time - prev_time) * (time - prev_time);
+    opti_speed = prev_speed + (curr_speed - prev_speed) / (curr_time - prev_time) * (thres_time - prev_time);
+    ROS_INFO("id: %d, prev_time: %f, curr_time: %f, time: %f, thres_time: %f", id, prev_time, curr_time,
+          time, thres_time);
   }else
     opti_speed = speed_msg_buffer[id].second;
 
   imu_state.opti_speed = opti_speed;
-  cout << "id: " << speed_msg_buffer[id].second.transpose() 
-    << " id-1: " << speed_msg_buffer[id-1].second.transpose()  << " opti_speed: " << opti_speed.transpose() << endl;
+
+  // cout << "id: " << speed_msg_buffer[id].second.transpose() 
+  //   << " id-1: " << speed_msg_buffer[id-1].second.transpose()  << " opti_speed: " << opti_speed.transpose() << endl;
 
   // if(window.size() > 0){
   //   Eigen::Vector3d sum_opti_speed = opti_speed;
@@ -1120,7 +1133,7 @@ void MsckfVio::mocapOdomCallback(
 void MsckfVio::batchImuProcessing(const double& time_bound) {
   // Counter how many IMU msgs in the buffer are used.
   int used_imu_msg_cntr = 0;
-  use_imu_num = 0;
+  // use_imu_num = 0;
   // cout << "gravity: " << IMUState::gravity << endl;
   for (const auto& imu_msg : imu_msg_buffer) {
     double imu_time = imu_msg.header.stamp.toSec();
@@ -1138,7 +1151,7 @@ void MsckfVio::batchImuProcessing(const double& time_bound) {
     // Execute process model.
     processModel(imu_time, m_gyro, m_acc);
     ++used_imu_msg_cntr;
-    use_imu_num ++;
+    // use_imu_num ++;
   }
 
   // Set the state ID for the new IMU state.

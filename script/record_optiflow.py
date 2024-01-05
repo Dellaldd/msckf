@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 class Logger:
     def __init__(self):
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_3_6/filter/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_4_1/filter_1/"
         self.f_gt_vel = open(self.fold + "groundtruth_velocity.txt", 'w')
         self.f_filter_vel = open(self.fold + "filter_velocity.txt", 'w')
         self.f_no_filter_vel = open(self.fold + "no_filter_velocity.txt", 'w')

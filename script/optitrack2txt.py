@@ -13,7 +13,7 @@ import threading
 
 class Logger:
     def __init__(self):
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_3_6/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_4_2/"
         self.f_gt = open(self.fold + "gt.txt", 'w')
         
         self.gt = []      

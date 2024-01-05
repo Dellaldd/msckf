@@ -6,7 +6,7 @@ from tf.transformations import euler_from_quaternion
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_3_6/filter/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_4_1/filter_1/"
     gt_path = foldpath + "groundtruth_velocity.txt"
     opti_path = foldpath + "filter_velocity.txt"
     no_filter_path = foldpath + "no_filter_velocity.txt"
@@ -15,7 +15,7 @@ def main():
     opti_vel = np.loadtxt(opti_path, delimiter=' ', skiprows=1)
     no_filter = np.loadtxt(no_filter_path, delimiter=' ', skiprows=1)
     
-    fig1, ax1 = plt.subplots(2, 3)
+    fig1, ax1 = plt.subplots(3, 1)
     gt_vel = np.array(gt_vel)
     opti_vel = np.array(opti_vel)
     
@@ -25,17 +25,17 @@ def main():
         
     print(gt_vel.shape[0], opti_vel.shape[0])
     
-    ax1[0, 0].plot(gt_vel[start_id:,0], gt_vel[start_id:,1], 'r-', label = 'gt')
-    ax1[0, 1].plot(gt_vel[start_id:,0], gt_vel[start_id:,2], 'r-', label = 'gt')
-    ax1[0, 2].plot(gt_vel[start_id:,0], gt_vel[start_id:,3], 'r-', label = 'gt')
+    ax1[0].plot(gt_vel[start_id:,0], gt_vel[start_id:,1], 'r-', label = 'gt')
+    ax1[1].plot(gt_vel[start_id:,0], gt_vel[start_id:,2], 'r-', label = 'gt')
+    ax1[2].plot(gt_vel[start_id:,0], gt_vel[start_id:,3], 'r-', label = 'gt')
     
-    ax1[0, 0].plot(opti_vel[:,0]-0.03, opti_vel[:,1], 'b-', label = 'opti')
-    ax1[0, 1].plot(opti_vel[:,0]-0.03, opti_vel[:,2], 'b-', label = 'opti')
-    ax1[0, 2].plot(opti_vel[:,0]-0.03, opti_vel[:,3], 'b-', label = 'opti')
+    ax1[0].plot(opti_vel[:,0]-0.03, opti_vel[:,1], 'b-', label = 'opti')
+    ax1[1].plot(opti_vel[:,0]-0.03, opti_vel[:,2], 'b-', label = 'opti')
+    ax1[2].plot(opti_vel[:,0]-0.03, opti_vel[:,3], 'b-', label = 'opti')
     
-    ax1[0, 0].plot(no_filter[:,0]-0.03, no_filter[:,1], 'g-', label = 'no_filter')    
-    ax1[0, 1].plot(no_filter[:,0]-0.03, no_filter[:,2], 'g-', label = 'no_filter')
-    ax1[0, 2].plot(no_filter[:,0]-0.03, no_filter[:,3], 'g-', label = 'no_filter')
+    # ax1[0, 0].plot(no_filter[:,0]-0.03, no_filter[:,1]/1000, 'g-', label = 'no_filter')    
+    # ax1[0, 0].plot(no_filter[:,0]-0.03, no_filter[:,2]/1000, 'y-', label = 'no_filter')
+    # ax1[0, 2].plot(no_filter[:,0]-0.03, no_filter[:,3], 'g-', label = 'no_filter')
     
     error_vel = []
     gt_num = 0

@@ -189,7 +189,8 @@ class MsckfVio {
     // State vector
     StateServer state_server;
     // Maximum number of camera states
-    int max_cam_state_size, use_imu_num;
+    int max_cam_state_size;
+    double use_imu_num;
     Eigen::Vector3d opti_bias_acc, opti_bias_gyro;
 
     // Features used
@@ -271,6 +272,7 @@ class MsckfVio {
     double prev_time, prev_pz;
     std::vector<Gt> gt_poses;
     int gt_num = 0, gt_init = 0;
+    double dt_imu_opti = 0.03;
 };
 
 typedef MsckfVio::Ptr MsckfVioPtr;
