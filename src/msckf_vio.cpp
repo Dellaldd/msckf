@@ -801,10 +801,7 @@ void MsckfVio::initialize_optiflow(){
   cout << "q_imu_opti: " << q.toRotationMatrix() << endl;
 
   state_server.imu_state.R_vio_opti = q.toRotationMatrix();
-  state_server.imu_state.R_vio_opti = Eigen::Matrix3d::Identity();
-//   state_server.imu_state.R_vio_opti << 0.93937,  -0.340883,   0.037192,
-//   0.333882,   0.933972,   0.127358,
-// -0.0781504,  -0.107218,   0.991159;
+  // state_server.imu_state.R_vio_opti = Eigen::Matrix3d::Identity();
 
 }
 
@@ -959,7 +956,7 @@ void MsckfVio::optiflowProcess(){
   use_imu_num = r.norm();
   ROS_INFO("R_ERROR: %f, %f, %f", r(0), r(1), r(2));
 
-  if(r.norm() < 0.1)
+  if(r.norm() < 0.15)
     OptiflowmeasurementUpdate(H_x, r, noise);
   
 }
@@ -2030,7 +2027,11 @@ void MsckfVio::publish(const ros::Time& time) {
       auto first_frame = window.begin();
       window.erase(first_frame);
     }
-    window.push_back(state_server.imu_state);
+
+    Eigen::Vector3d r_vel = state_server.imu_state.velocity - state_server.imu_state.opti_speed;
+    double r = r_vel.norm();
+    if(r < 0.05)
+      window.push_back(state_server.imu_state);
   }
 
   // Convert the IMU frame to the body frame.
