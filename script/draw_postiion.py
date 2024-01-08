@@ -20,11 +20,11 @@ def quaternion_to_euler(q, degree_mode=1):
     return euler
 
 def main():
-    bagname = "v103"
+    bagname = "v203"
     noisetype = "noise_0_1"
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/" + bagname + "/" + noisetype + "/"
-    msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
-    if_use_speed_gt = True
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/weight/" + bagname + "/" + noisetype + "/"
+    msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v103/"
+    if_use_speed_gt = False
     
     if if_use_speed_gt:
         speed_path = "/home/ldd/msckf_ws/src/msckf_vio/dataset/" + bagname + "/" + "noise_0_1" + "/opti_speed.txt"
@@ -56,6 +56,7 @@ def main():
     eulers_gt = []
     eulers_msckf = []
     error_pos = []
+    start_time = esti[0,0]
     
     end = min(esti.shape[0], gt.shape[0])
     start = 0
@@ -100,26 +101,26 @@ def main():
     eulers = np.array(eulers)
     fig1, ax1 = plt.subplots(3, 3)
     
-    ax1[0][0].plot(esti[:end,0], esti[:end,1], 'b-', label = 'esti')
-    ax1[0][1].plot(esti[:end,0], esti[:end,2], 'b-', label = 'esti')
-    ax1[0][2].plot(esti[:end,0], esti[:end,3], 'b-', label = 'esti')
+    ax1[0][0].plot(esti[:end,0]-start_time, esti[:end,1], 'b-', label = 'esti')
+    ax1[0][1].plot(esti[:end,0]-start_time, esti[:end,2], 'b-', label = 'esti')
+    ax1[0][2].plot(esti[:end,0]-start_time, esti[:end,3], 'b-', label = 'esti')
     
-    ax1[1][0].plot(esti[:end,0], eulers[:end,0], 'b-', label = 'esti')
-    ax1[1][1].plot(esti[:end,0], eulers[:end,1], 'b-', label = 'esti')
-    ax1[1][2].plot(esti[:end,0], eulers[:end,2], 'b-', label = 'esti')
+    ax1[1][0].plot(esti[:end,0]-start_time, eulers[:end,0], 'b-', label = 'esti')
+    ax1[1][1].plot(esti[:end,0]-start_time, eulers[:end,1], 'b-', label = 'esti')
+    ax1[1][2].plot(esti[:end,0]-start_time, eulers[:end,2], 'b-', label = 'esti')
     
-    ax1[2][0].plot(esti[:end,0], esti[:end,8], 'b-', label = 'esti')
-    ax1[2][1].plot(esti[:end,0], esti[:end,9], 'b-', label = 'esti')
-    ax1[2][2].plot(esti[:end,0], esti[:end,10], 'b-', label = 'esti')
+    ax1[2][0].plot(esti[:end,0]-start_time, esti[:end,8], 'b-', label = 'esti')
+    ax1[2][1].plot(esti[:end,0]-start_time, esti[:end,9], 'b-', label = 'esti')
+    ax1[2][2].plot(esti[:end,0]-start_time, esti[:end,10], 'b-', label = 'esti')
     
     
-    ax1[0][0].plot(gt[:end,0], gt[:end,1], 'r-', label = 'gt')
-    ax1[0][1].plot(gt[:end,0], gt[:end,2], 'r-', label = 'gt')
-    ax1[0][2].plot(gt[:end,0], gt[:end,3], 'r-', label = 'gt')
+    ax1[0][0].plot(gt[:end,0]-start_time, gt[:end,1], 'r-', label = 'gt')
+    ax1[0][1].plot(gt[:end,0]-start_time, gt[:end,2], 'r-', label = 'gt')
+    ax1[0][2].plot(gt[:end,0]-start_time, gt[:end,3], 'r-', label = 'gt')
     
-    ax1[1][0].plot(gt[:end,0], eulers_gt[:end,0], 'r-', label = 'gt')
-    ax1[1][1].plot(gt[:end,0], eulers_gt[:end,1], 'r-', label = 'gt')
-    ax1[1][2].plot(gt[:end,0], eulers_gt[:end,2], 'r-', label = 'gt')
+    ax1[1][0].plot(gt[:end,0]-start_time, eulers_gt[:end,0], 'r-', label = 'gt')
+    ax1[1][1].plot(gt[:end,0]-start_time, eulers_gt[:end,1], 'r-', label = 'gt')
+    ax1[1][2].plot(gt[:end,0]-start_time, eulers_gt[:end,2], 'r-', label = 'gt')
     
     if if_use_speed_gt:
         ax1[2][0].plot(speed_gt[:,0]*1e-9, speed_gt[:,1], 'r-', label = 'gt')
@@ -153,13 +154,13 @@ def main():
     plt.savefig(save_position_path, dpi=300)
 
     fig2, ax2 = plt.subplots(4, 3)
-    ax2[0][0].plot(bias[start:end,0], bias[start:end,1], 'b-')
-    ax2[0][1].plot(bias[start:end,0], bias[start:end,2], 'b-')
-    ax2[0][2].plot(bias[start:end,0], bias[start:end,3], 'b-')
+    ax2[0][0].plot(bias[start:end,0]-start_time, bias[start:end,1], 'b-')
+    ax2[0][1].plot(bias[start:end,0]-start_time, bias[start:end,2], 'b-')
+    ax2[0][2].plot(bias[start:end,0]-start_time, bias[start:end,3], 'b-')
     
-    ax2[1][0].plot(bias[start:end,0], bias[start:end,4], 'b-')
-    ax2[1][1].plot(bias[start:end,0], bias[start:end,5], 'b-')
-    ax2[1][2].plot(bias[start:end,0], bias[start:end,6], 'b-')  
+    ax2[1][0].plot(bias[start:end,0]-start_time, bias[start:end,4], 'b-')
+    ax2[1][1].plot(bias[start:end,0]-start_time, bias[start:end,5], 'b-')
+    ax2[1][2].plot(bias[start:end,0]-start_time, bias[start:end,6], 'b-')  
     
     # ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.002153, 'r-')
     # ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.020744, 'r-')
@@ -170,28 +171,28 @@ def main():
     # ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.094797, 'r-') 
     
     # -0.002341, 0.021815, 0.07660
-    ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.002341, 'r-', label = 'gt')
-    ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.021815, 'r-', label = 'gt')
-    ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.07660, 'r-', label = 'gt')
+    ax2[1][0].plot(bias[start:end,0]-start_time, np.ones((end - start)) * -0.002341, 'r-', label = 'gt')
+    ax2[1][1].plot(bias[start:end,0]-start_time, np.ones((end - start)) * 0.021815, 'r-', label = 'gt')
+    ax2[1][2].plot(bias[start:end,0]-start_time, np.ones((end - start)) * 0.07660, 'r-', label = 'gt')
     
-    ax2[0][0].plot(bias[start:end,0], bias[start:end,7], 'g-', label = 'opti_bias')
-    ax2[0][1].plot(bias[start:end,0], bias[start:end,8], 'g-', label = 'opti_bias')
-    ax2[0][2].plot(bias[start:end,0], bias[start:end,9], 'g-', label = 'opti_bias')
+    ax2[0][0].plot(bias[start:end,0]-start_time, bias[start:end,7], 'g-', label = 'opti_bias')
+    ax2[0][1].plot(bias[start:end,0]-start_time, bias[start:end,8], 'g-', label = 'opti_bias')
+    ax2[0][2].plot(bias[start:end,0]-start_time, bias[start:end,9], 'g-', label = 'opti_bias')
     
-    ax2[1][0].plot(bias[start:end,0], bias[start:end,10], 'g-', label = 'opti_bias')
-    ax2[1][1].plot(bias[start:end,0], bias[start:end,11], 'g-', label = 'opti_bias')
-    ax2[1][2].plot(bias[start:end,0], bias[start:end,12], 'g-', label = 'opti_bias')  
+    ax2[1][0].plot(bias[start:end,0]-start_time, bias[start:end,10], 'g-', label = 'opti_bias')
+    ax2[1][1].plot(bias[start:end,0]-start_time, bias[start:end,11], 'g-', label = 'opti_bias')
+    ax2[1][2].plot(bias[start:end,0]-start_time, bias[start:end,12], 'g-', label = 'opti_bias')  
     
-    ax2[2][0].plot(bias[start:end,0], bias[start:end,13], 'g-')
+    ax2[2][0].plot(bias[start:end,0]-start_time, bias[start:end,13], 'g-')
     
     if(use_msckf):
-        ax2[0][0].plot(msckf_bias[start:end,0], msckf_bias[start:end,1], 'y-', label = 'msckf')
-        ax2[0][1].plot(msckf_bias[start:end,0], msckf_bias[start:end,2], 'y-', label = 'msckf')
-        ax2[0][2].plot(msckf_bias[start:end,0], msckf_bias[start:end,3], 'y-', label = 'msckf')
+        ax2[0][0].plot(msckf_bias[start:end,0]-start_time, msckf_bias[start:end,1], 'y-', label = 'msckf')
+        ax2[0][1].plot(msckf_bias[start:end,0]-start_time, msckf_bias[start:end,2], 'y-', label = 'msckf')
+        ax2[0][2].plot(msckf_bias[start:end,0]-start_time, msckf_bias[start:end,3], 'y-', label = 'msckf')
         
-        ax2[1][0].plot(msckf_bias[start:end,0], msckf_bias[start:end,4], 'y-', label = 'msckf')
-        ax2[1][1].plot(msckf_bias[start:end,0], msckf_bias[start:end,5], 'y-', label = 'msckf')
-        ax2[1][2].plot(msckf_bias[start:end,0], msckf_bias[start:end,6], 'y-', label = 'msckf')
+        ax2[1][0].plot(msckf_bias[start:end,0]-start_time, msckf_bias[start:end,4], 'y-', label = 'msckf')
+        ax2[1][1].plot(msckf_bias[start:end,0]-start_time, msckf_bias[start:end,5], 'y-', label = 'msckf')
+        ax2[1][2].plot(msckf_bias[start:end,0]-start_time, msckf_bias[start:end,6], 'y-', label = 'msckf')
     
     ax2[0, 0].set_title("acc_x(m^s-2)")
     ax2[0, 1].set_title("acc_y(m^s-2)")

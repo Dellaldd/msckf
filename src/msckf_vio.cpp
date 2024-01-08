@@ -587,7 +587,7 @@ void MsckfVio::featureCallback(
   double prune_cam_states_time = (
       ros::Time::now()-start_time).toSec();
   // ROS_INFO("finish pruneCamStateBuffer! ");
-  optiflowProcess();
+  // optiflowProcess();
   // Publish the odometry.
   start_time = ros::Time::now();
   publish(msg->header.stamp);
@@ -687,33 +687,33 @@ void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::V
           smallAngleQuaternion(delta_x_imu.head<3>());
   state_server.imu_state.orientation = quaternionMultiplication(
               dq_imu, state_server.imu_state.orientation);
-  cout << "delta dq_imu: " << delta_x_imu.head<3>() << endl;
+  // cout << "delta dq_imu: " << delta_x_imu.head<3>() << endl;
 
   state_server.imu_state.gyro_bias += delta_x_imu.segment<3>(3);
-  cout << "delta gyro_bias: " << delta_x_imu.segment<3>(3) << endl;
+  // cout << "delta gyro_bias: " << delta_x_imu.segment<3>(3) << endl;
 
   state_server.imu_state.velocity += delta_x_imu.segment<3>(6);
-  cout << "delta velocity: " << delta_x_imu.segment<3>(6) << endl;
+  // cout << "delta velocity: " << delta_x_imu.segment<3>(6) << endl;
 
   state_server.imu_state.acc_bias += delta_x_imu.segment<3>(9);
-  cout << "delta acc_bias: " << delta_x_imu.segment<3>(9) << endl;
+  // cout << "delta acc_bias: " << delta_x_imu.segment<3>(9) << endl;
 
   state_server.imu_state.position += delta_x_imu.segment<3>(12);
-  cout << "delta position: " << delta_x_imu.segment<3>(12) << endl;
+  // cout << "delta position: " << delta_x_imu.segment<3>(12) << endl;
 
   const Vector4d dq_extrinsic =
           smallAngleQuaternion(delta_x_imu.segment<3>(15));
-  cout << "dq_extrinsic: " << delta_x_imu.segment<3>(15) << endl;
+  // cout << "dq_extrinsic: " << delta_x_imu.segment<3>(15) << endl;
 
   state_server.imu_state.R_imu_cam0 = quaternionToRotation(
               dq_extrinsic) * state_server.imu_state.R_imu_cam0;  
   state_server.imu_state.t_cam0_imu += delta_x_imu.segment<3>(18);
-  cout << "dt_extrinsic: " << delta_x_imu.segment<3>(18) << endl;
+  // cout << "dt_extrinsic: " << delta_x_imu.segment<3>(18) << endl;
 
 
   const Vector4d dq_extrinsic_opti =
           smallAngleQuaternion(delta_x_imu.segment<3>(21));
-  cout << "dq_extrinsic_opti: " << delta_x_imu.segment<3>(21) << endl;
+  // cout << "dq_extrinsic_opti: " << delta_x_imu.segment<3>(21) << endl;
 
   state_server.imu_state.R_vio_opti = quaternionToRotation(
               dq_extrinsic_opti) * state_server.imu_state.R_vio_opti;
@@ -1084,7 +1084,7 @@ void MsckfVio::batchImuProcessing(const double& time_bound) {
     // Execute process model.
     processModel(imu_time, m_gyro, m_acc);
     ++used_imu_msg_cntr;
-    use_imu_num ++;
+    // use_imu_num ++;
   }
 
   // Set the state ID for the new IMU state.
@@ -1429,7 +1429,7 @@ void MsckfVio::measurementJacobian(
 void MsckfVio::featureJacobian(
     const FeatureIDType& feature_id,
     const std::vector<StateIDType>& cam_state_ids,
-    MatrixXd& H_x, VectorXd& r) {
+    MatrixXd& H_x, VectorXd& r, double& weight) {
 
   const auto& feature = map_server[feature_id];
 
@@ -1452,13 +1452,15 @@ void MsckfVio::featureJacobian(
   VectorXd r_j = VectorXd::Zero(jacobian_row_size);
   int stack_cntr = 0;
 
+  Eigen::MatrixXd sum_jacobian = Eigen::MatrixXd::Zero(6, 6);
+
   for (const auto& cam_id : valid_cam_state_ids) {
 
     Matrix<double, 4, 6> H_xi = Matrix<double, 4, 6>::Zero();
     Matrix<double, 4, 3> H_fi = Matrix<double, 4, 3>::Zero();
     Vector4d r_i = Vector4d::Zero();
     measurementJacobian(cam_id, feature.id, H_xi, H_fi, r_i);
-
+    sum_jacobian += H_xi.transpose() * H_xi;
     auto cam_state_iter = state_server.cam_states.find(cam_id);
     int cam_state_cntr = std::distance(
         state_server.cam_states.begin(), cam_state_iter);
@@ -1469,6 +1471,28 @@ void MsckfVio::featureJacobian(
     r_j.segment<4>(stack_cntr) = r_i;
     stack_cntr += 4;
   }
+
+  // weight
+  if(valid_cam_state_ids.size() > 2){
+    cout << "----------sum_jacobian----------" << endl;
+    cout << sum_jacobian << endl;
+    JacobiSVD<Eigen::MatrixXd> svd(sum_jacobian);
+    cout << svd.rank() << endl;
+    cout << sum_jacobian.determinant() << endl;
+    cout << sum_jacobian.inverse().determinant() << endl;
+    Eigen::MatrixXd feature_noise = Eigen::MatrixXd::Identity(6,6) * Feature::observation_noise;
+    Eigen::MatrixXd confidence = sum_jacobian.lu().solve(feature_noise);
+    double weight = 1. / pow(confidence.determinant(), 1./ 12.);
+    // Eigen::MatrixXd weight = pinv_eigen_based(sum_jacobian) * feature_noise;
+    weight = weight/valid_cam_state_ids.size();
+    weight = 1/weight;
+
+    if(weight > 25)
+      weight = 25;
+    use_imu_num = weight;
+    cout << "valid_cam_state_ids: " << valid_cam_state_ids.size() << " weight: " << weight << endl;
+  }
+  
 
   // Project the residual and Jacobians onto the nullspace
   // of H_fj.
@@ -1483,7 +1507,7 @@ void MsckfVio::featureJacobian(
 }
 
 void MsckfVio::measurementUpdate(
-    const MatrixXd& H, const VectorXd& r) {
+    const MatrixXd& H, const VectorXd& r, const double weight) {
 
   if (H.rows() == 0 || r.rows() == 0) return;
 
@@ -1523,8 +1547,8 @@ void MsckfVio::measurementUpdate(
   // Compute the Kalman gain.
   const MatrixXd& P = state_server.state_cov;
   MatrixXd S = H_thin*P*H_thin.transpose() +
-      Feature::observation_noise*MatrixXd::Identity(
-        H_thin.rows(), H_thin.rows());
+      weight * Feature::observation_noise*MatrixXd::Identity(
+      H_thin.rows(), H_thin.rows());
   //MatrixXd K_transpose = S.fullPivHouseholderQr().solve(H_thin*P);
   MatrixXd K_transpose = S.ldlt().solve(H_thin*P);
   MatrixXd K = K_transpose.transpose();
@@ -1668,6 +1692,7 @@ void MsckfVio::removeLostFeatures() {
       24+6*state_server.cam_states.size());
   VectorXd r = VectorXd::Zero(jacobian_row_size);
   int stack_cntr = 0;
+  double noise_weight = 1;
 
   // Process the features which lose track.
   for (const auto& feature_id : processed_feature_ids) {
@@ -1679,8 +1704,7 @@ void MsckfVio::removeLostFeatures() {
 
     MatrixXd H_xj;
     VectorXd r_j;
-    featureJacobian(feature.id, cam_state_ids, H_xj, r_j);
-
+    featureJacobian(feature.id, cam_state_ids, H_xj, r_j, noise_weight);
     if (gatingTest(H_xj, r_j, cam_state_ids.size()-1)) {
       H_x.block(stack_cntr, 0, H_xj.rows(), H_xj.cols()) = H_xj;
       r.segment(stack_cntr, r_j.rows()) = r_j;
@@ -1696,7 +1720,7 @@ void MsckfVio::removeLostFeatures() {
   r.conservativeResize(stack_cntr);
 
   // Perform the measurement update step.
-  measurementUpdate(H_x, r);
+  measurementUpdate(H_x, r, noise_weight);
 
   // Remove all processed features from the map.
   for (const auto& feature_id : processed_feature_ids)
@@ -1812,6 +1836,7 @@ void MsckfVio::pruneCamStateBuffer() {
       24+6*state_server.cam_states.size());
   VectorXd r = VectorXd::Zero(jacobian_row_size);
   int stack_cntr = 0;
+  double noise_weight = 1;
 
   for (auto& item : map_server) {
     auto& feature = item.second;
@@ -1828,7 +1853,7 @@ void MsckfVio::pruneCamStateBuffer() {
 
     MatrixXd H_xj;
     VectorXd r_j;
-    featureJacobian(feature.id, involved_cam_state_ids, H_xj, r_j);
+    featureJacobian(feature.id, involved_cam_state_ids, H_xj, r_j, noise_weight);
 
     if (gatingTest(H_xj, r_j, involved_cam_state_ids.size())) {
       H_x.block(stack_cntr, 0, H_xj.rows(), H_xj.cols()) = H_xj;
@@ -1844,7 +1869,7 @@ void MsckfVio::pruneCamStateBuffer() {
   r.conservativeResize(stack_cntr);
 
   // Perform measurement update.
-  measurementUpdate(H_x, r);
+  measurementUpdate(H_x, r, noise_weight);
 
   for (const auto& cam_id : rm_cam_state_ids) {
     int cam_sequence = std::distance(state_server.cam_states.begin(),

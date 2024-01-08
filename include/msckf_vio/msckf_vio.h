@@ -163,9 +163,9 @@ class MsckfVio {
     // in the given camera states of this feature.
     void featureJacobian(const FeatureIDType& feature_id,
         const std::vector<StateIDType>& cam_state_ids,
-        Eigen::MatrixXd& H_x, Eigen::VectorXd& r);
+        Eigen::MatrixXd& H_x, Eigen::VectorXd& r, double& weight);
     void measurementUpdate(const Eigen::MatrixXd& H,
-        const Eigen::VectorXd& r);
+        const Eigen::VectorXd& r, const double weight);
     bool gatingTest(const Eigen::MatrixXd& H,
         const Eigen::VectorXd&r, const int& dof);
     void removeLostFeatures();
@@ -181,7 +181,8 @@ class MsckfVio {
     // State vector
     StateServer state_server;
     // Maximum number of camera states
-    int max_cam_state_size, use_imu_num;
+    int max_cam_state_size;
+    double use_imu_num;
     Eigen::Vector3d opti_bias_acc, opti_bias_gyro;
 
     // Features used
