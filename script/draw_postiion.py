@@ -20,8 +20,8 @@ def quaternion_to_euler(q, degree_mode=1):
     return euler
 
 def main():
-    bagname = "v203"
-    noisetype = "noise_0_1"
+    bagname = "v103"
+    noisetype = "vision_weight"
     foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/weight/" + bagname + "/" + noisetype + "/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v103/"
     if_use_speed_gt = False

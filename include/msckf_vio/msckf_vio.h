@@ -161,11 +161,13 @@ class MsckfVio {
         Eigen::Vector4d& r);
     // This function computes the Jacobian of all measurements viewed
     // in the given camera states of this feature.
+
     void featureJacobian(const FeatureIDType& feature_id,
         const std::vector<StateIDType>& cam_state_ids,
-        Eigen::MatrixXd& H_x, Eigen::VectorXd& r, double& weight);
-    void measurementUpdate(const Eigen::MatrixXd& H,
-        const Eigen::VectorXd& r, const double weight);
+        Eigen::MatrixXd& H_x, Eigen::VectorXd& r, Eigen::MatrixXd& per_feature_weight);
+
+    void measurementUpdate(const Eigen::MatrixXd& H, const Eigen::VectorXd& r, Eigen::MatrixXd noise_weight);
+    
     bool gatingTest(const Eigen::MatrixXd& H,
         const Eigen::VectorXd&r, const int& dof);
     void removeLostFeatures();

@@ -754,24 +754,6 @@ void MsckfVio::optiflowProcess(){
   r.segment<3>(0) = imu_state.opti_speed - imu_state.R_vio_opti * imu_state.velocity;
   Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
 
-  // observability
-  // Eigen::MatrixXd H_x_imu = H_x;
-  // Eigen::VectorXd u = Eigen::VectorXd::Zero(24+6*state_server.cam_states.size());
-
-  // u.segment<3>(0) = quaternionToRotation(imu_state.orientation_null) * IMUState::gravity;
-  // u.segment<3>(6) = -skewSymmetric(imu_state.velocity_null) * IMUState::gravity; // R_w_i
-  // u.segment<3>(12) = -skewSymmetric(imu_state.position_null) * IMUState::gravity;
-  // u.segment<3>(21) = imu_state.R_vio_opti * IMUState::gravity;
-
-  // auto cam_state_iter = state_server.cam_states.begin();
-  // for (int i = 0; i < state_server.cam_states.size(); ++i, ++cam_state_iter) {
-  //   u.segment<3>(24 + i * 6) = quaternionToRotation(cam_state_iter->second.orientation_null) * IMUState::gravity; // R_w_c
-  //   u.segment<3>(27 + i * 6) = -skewSymmetric(cam_state_iter->second.position_null) * IMUState::gravity;
-  // }
-  
-  // Eigen::MatrixXd H_ = H_x_imu - H_x_imu * u * (u.transpose() * u).inverse() * u.transpose();
-  // H_x = H_;
-
   // part observalibity
   Eigen::MatrixXd H_x_imu = Eigen::MatrixXd::Zero(3,6);
   H_x_imu.block<3,3>(0,0) = H_x.block<3,3>(0,6);
@@ -1429,7 +1411,7 @@ void MsckfVio::measurementJacobian(
 void MsckfVio::featureJacobian(
     const FeatureIDType& feature_id,
     const std::vector<StateIDType>& cam_state_ids,
-    MatrixXd& H_x, VectorXd& r, double& weight) {
+    Eigen::MatrixXd& H_x, Eigen::VectorXd& r, Eigen::MatrixXd& per_feature_weight) {
 
   const auto& feature = map_server[feature_id];
 
@@ -1454,8 +1436,12 @@ void MsckfVio::featureJacobian(
 
   Eigen::MatrixXd sum_jacobian = Eigen::MatrixXd::Zero(6, 6);
 
+  StateIDType first_cam_id = valid_cam_state_ids[0];
+  int sum_id = 0;
   for (const auto& cam_id : valid_cam_state_ids) {
-
+    // cout << "id: " << cam_id - first_cam_id << endl;
+    sum_id += cam_id - first_cam_id;
+    
     Matrix<double, 4, 6> H_xi = Matrix<double, 4, 6>::Zero();
     Matrix<double, 4, 3> H_fi = Matrix<double, 4, 3>::Zero();
     Vector4d r_i = Vector4d::Zero();
@@ -1471,29 +1457,7 @@ void MsckfVio::featureJacobian(
     r_j.segment<4>(stack_cntr) = r_i;
     stack_cntr += 4;
   }
-
-  // weight
-  if(valid_cam_state_ids.size() > 2){
-    cout << "----------sum_jacobian----------" << endl;
-    cout << sum_jacobian << endl;
-    JacobiSVD<Eigen::MatrixXd> svd(sum_jacobian);
-    cout << svd.rank() << endl;
-    cout << sum_jacobian.determinant() << endl;
-    cout << sum_jacobian.inverse().determinant() << endl;
-    Eigen::MatrixXd feature_noise = Eigen::MatrixXd::Identity(6,6) * Feature::observation_noise;
-    Eigen::MatrixXd confidence = sum_jacobian.lu().solve(feature_noise);
-    double weight = 1. / pow(confidence.determinant(), 1./ 12.);
-    // Eigen::MatrixXd weight = pinv_eigen_based(sum_jacobian) * feature_noise;
-    weight = weight/valid_cam_state_ids.size();
-    weight = 1/weight;
-
-    if(weight > 25)
-      weight = 25;
-    use_imu_num = weight;
-    cout << "valid_cam_state_ids: " << valid_cam_state_ids.size() << " weight: " << weight << endl;
-  }
   
-
   // Project the residual and Jacobians onto the nullspace
   // of H_fj.
   JacobiSVD<MatrixXd> svd_helper(H_fj, ComputeFullU | ComputeThinV);
@@ -1503,11 +1467,47 @@ void MsckfVio::featureJacobian(
   H_x = A.transpose() * H_xj;
   r = A.transpose() * r_j;
 
+  // feature weight
+  double feature_track_weight = sqrt(double(sum_id) / double(valid_cam_state_ids.size() - 1));
+  // if(feature_track_weight > 10)
+  //   feature_track_weight = 10;
+
+  // vision weight
+  double vision_weight;
+  // if(valid_cam_state_ids.size() > 2){
+  //   cout << "----------sum_jacobian----------" << endl;
+  //   cout << sum_jacobian << endl;
+
+  //   JacobiSVD<Eigen::MatrixXd> svd(sum_jacobian);
+
+  //   cout << sum_jacobian.determinant() << endl;
+  //   // cout << sum_jacobian.inverse().determinant() << endl;
+
+  //   Eigen::MatrixXd feature_noise = Eigen::MatrixXd::Identity(6,6) * Feature::observation_noise;
+  //   Eigen::MatrixXd confidence = sum_jacobian.lu().solve(feature_noise);
+    
+  //   double weight = 1. / pow(confidence.determinant(), 1./ 12.);
+  //   weight = weight/valid_cam_state_ids.size();
+  //   weight = 1/weight;
+    
+  //   if(weight > 20)
+  //     weight = 20;
+  //   vision_weight = sqrt(weight * feature_track_weight);
+
+  // }else{
+    vision_weight = feature_track_weight;
+  // }
+
+  use_imu_num = vision_weight;
+  per_feature_weight = Eigen::MatrixXd::Identity(H_x.rows(), H_x.rows()) * vision_weight;
+  ROS_INFO("sum id: %d, valid: %d, weight: %f, SIZE: %d", sum_id, valid_cam_state_ids.size(), feature_track_weight, H_x.rows());
+
+
   return;
 }
 
 void MsckfVio::measurementUpdate(
-    const MatrixXd& H, const VectorXd& r, const double weight) {
+    const Eigen::MatrixXd& H, const Eigen::VectorXd& r, Eigen::MatrixXd noise_weight) {
 
   if (H.rows() == 0 || r.rows() == 0) return;
 
@@ -1515,6 +1515,7 @@ void MsckfVio::measurementUpdate(
   // complexity as in Equation (28), (29).
   MatrixXd H_thin;
   VectorXd r_thin;
+  MatrixXd noise_thin;
 
   if (H.rows() > H.cols()) {
     // Convert H to a sparse matrix.
@@ -1532,7 +1533,7 @@ void MsckfVio::measurementUpdate(
 
     H_thin = H_temp.topRows(24+state_server.cam_states.size()*6);
     r_thin = r_temp.head(24+state_server.cam_states.size()*6);
-
+    noise_thin = Feature::observation_noise * noise_weight.block(0,0,24+state_server.cam_states.size()*6, 24+state_server.cam_states.size()*6);
     //HouseholderQR<MatrixXd> qr_helper(H);
     //MatrixXd Q = qr_helper.householderQ();
     //MatrixXd Q1 = Q.leftCols(21+state_server.cam_states.size()*6);
@@ -1542,13 +1543,18 @@ void MsckfVio::measurementUpdate(
   } else {
     H_thin = H;
     r_thin = r;
+    noise_thin = Feature::observation_noise * noise_weight;
   }
 
   // Compute the Kalman gain.
   const MatrixXd& P = state_server.state_cov;
-  MatrixXd S = H_thin*P*H_thin.transpose() +
-      weight * Feature::observation_noise*MatrixXd::Identity(
-      H_thin.rows(), H_thin.rows());
+
+  // MatrixXd S = H_thin*P*H_thin.transpose() +
+  //     weight * Feature::observation_noise*MatrixXd::Identity(
+  //     H_thin.rows(), H_thin.rows());
+  ROS_INFO("H_thin: %d, %d, noise_weight: %d, %d", H_thin.rows(), H_thin.cols(), noise_weight.rows(), noise_weight.cols());
+  MatrixXd S = H_thin*P*H_thin.transpose() + noise_thin;
+
   //MatrixXd K_transpose = S.fullPivHouseholderQr().solve(H_thin*P);
   MatrixXd K_transpose = S.ldlt().solve(H_thin*P);
   MatrixXd K = K_transpose.transpose();
@@ -1688,11 +1694,13 @@ void MsckfVio::removeLostFeatures() {
   // Return if there is no lost feature to be processed.
   if (processed_feature_ids.size() == 0) return;
 
+  int process_feature_num = processed_feature_ids.size();
   MatrixXd H_x = MatrixXd::Zero(jacobian_row_size,
       24+6*state_server.cam_states.size());
   VectorXd r = VectorXd::Zero(jacobian_row_size);
+  Eigen::MatrixXd noise_weight = Eigen::MatrixXd::Identity(jacobian_row_size, jacobian_row_size);
+
   int stack_cntr = 0;
-  double noise_weight = 1;
 
   // Process the features which lose track.
   for (const auto& feature_id : processed_feature_ids) {
@@ -1704,10 +1712,12 @@ void MsckfVio::removeLostFeatures() {
 
     MatrixXd H_xj;
     VectorXd r_j;
-    featureJacobian(feature.id, cam_state_ids, H_xj, r_j, noise_weight);
+    MatrixXd per_feature_weight;
+    featureJacobian(feature.id, cam_state_ids, H_xj, r_j, per_feature_weight);
     if (gatingTest(H_xj, r_j, cam_state_ids.size()-1)) {
       H_x.block(stack_cntr, 0, H_xj.rows(), H_xj.cols()) = H_xj;
       r.segment(stack_cntr, r_j.rows()) = r_j;
+      noise_weight.block(stack_cntr, stack_cntr, H_xj.rows(), H_xj.rows()) = per_feature_weight;
       stack_cntr += H_xj.rows();
     }
 
@@ -1718,7 +1728,9 @@ void MsckfVio::removeLostFeatures() {
 
   H_x.conservativeResize(stack_cntr, H_x.cols());
   r.conservativeResize(stack_cntr);
+  noise_weight.conservativeResize(stack_cntr, stack_cntr);
 
+  
   // Perform the measurement update step.
   measurementUpdate(H_x, r, noise_weight);
 
@@ -1836,7 +1848,7 @@ void MsckfVio::pruneCamStateBuffer() {
       24+6*state_server.cam_states.size());
   VectorXd r = VectorXd::Zero(jacobian_row_size);
   int stack_cntr = 0;
-  double noise_weight = 1;
+  Eigen::MatrixXd noise_weight = Eigen::MatrixXd::Identity(jacobian_row_size, jacobian_row_size);
 
   for (auto& item : map_server) {
     auto& feature = item.second;
@@ -1853,11 +1865,13 @@ void MsckfVio::pruneCamStateBuffer() {
 
     MatrixXd H_xj;
     VectorXd r_j;
-    featureJacobian(feature.id, involved_cam_state_ids, H_xj, r_j, noise_weight);
+    MatrixXd per_feature_weight;
+    featureJacobian(feature.id, involved_cam_state_ids, H_xj, r_j, per_feature_weight);
 
     if (gatingTest(H_xj, r_j, involved_cam_state_ids.size())) {
       H_x.block(stack_cntr, 0, H_xj.rows(), H_xj.cols()) = H_xj;
       r.segment(stack_cntr, r_j.rows()) = r_j;
+      noise_weight.block(stack_cntr, stack_cntr, H_xj.rows(), H_xj.rows()) = per_feature_weight;
       stack_cntr += H_xj.rows();
     }
 
@@ -1867,6 +1881,7 @@ void MsckfVio::pruneCamStateBuffer() {
 
   H_x.conservativeResize(stack_cntr, H_x.cols());
   r.conservativeResize(stack_cntr);
+  noise_weight.conservativeResize(stack_cntr, stack_cntr);
 
   // Perform measurement update.
   measurementUpdate(H_x, r, noise_weight);
