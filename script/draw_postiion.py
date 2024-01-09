@@ -20,8 +20,8 @@ def quaternion_to_euler(q, degree_mode=1):
     return euler
 
 def main():
-    bagname = "v103"
-    noisetype = "vision_weight"
+    bagname = "v201"
+    noisetype = "test"
     foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/weight/" + bagname + "/" + noisetype + "/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v103/"
     if_use_speed_gt = False
@@ -184,6 +184,7 @@ def main():
     ax2[1][2].plot(bias[start:end,0]-start_time, bias[start:end,12], 'g-', label = 'opti_bias')  
     
     ax2[2][0].plot(bias[start:end,0]-start_time, bias[start:end,13], 'g-')
+    ax2[2][1].plot(bias[start:end,0]-start_time, bias[start:end,14], 'g-')
     
     if(use_msckf):
         ax2[0][0].plot(msckf_bias[start:end,0]-start_time, msckf_bias[start:end,1], 'y-', label = 'msckf')

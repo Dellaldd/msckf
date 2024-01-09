@@ -13,7 +13,7 @@ from msckf_vio.msg import BiasEstiInfo
 
 class Logger:
     def __init__(self):
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/weight/v103/vision_weight/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/weight/v201/test/"
         self.f_gt = open(self.fold + "stamped_groundtruth.txt", 'w')
         self.f_gt_vel = open(self.fold + "groundtruth_velocity.txt", 'w')
         self.f_esti = open(self.fold + "stamped_traj_estimate.txt", 'w')
@@ -40,7 +40,7 @@ class Logger:
     def bias_Cb(self, msg):
         self.bias_data.append([str(msg.header.stamp.to_sec()), str(msg.bias_acc_x), str(msg.bias_acc_y), str(msg.bias_acc_z)
                                , str(msg.bias_gyro_x), str(msg.bias_gyro_y), str(msg.bias_gyro_z), str(msg.opti_bias_acc_x), str(msg.opti_bias_acc_y), str(msg.opti_bias_acc_z)
-                               , str(msg.opti_bias_gyro_x), str(msg.opti_bias_gyro_y), str(msg.opti_bias_gyro_z), str(msg.use_imu_num)])
+                               , str(msg.opti_bias_gyro_x), str(msg.opti_bias_gyro_y), str(msg.opti_bias_gyro_z), str(msg.use_imu_num), str(msg.r_norm)])
     
     def write_data(self):
         for data in self.gt_pose:

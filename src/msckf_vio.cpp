@@ -587,7 +587,7 @@ void MsckfVio::featureCallback(
   double prune_cam_states_time = (
       ros::Time::now()-start_time).toSec();
   // ROS_INFO("finish pruneCamStateBuffer! ");
-  // optiflowProcess();
+  optiflowProcess();
   // Publish the odometry.
   start_time = ros::Time::now();
   publish(msg->header.stamp);
@@ -752,7 +752,7 @@ void MsckfVio::optiflowProcess(){
   H_x.block<3,3>(0,6) = imu_state.R_vio_opti;// q bg v ba p
   H_x.block<3,3>(0,21) = skewSymmetric(imu_state.R_vio_opti * imu_state.velocity);
   r.segment<3>(0) = imu_state.opti_speed - imu_state.R_vio_opti * imu_state.velocity;
-  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.1;
+  
 
   // part observalibity
   Eigen::MatrixXd H_x_imu = Eigen::MatrixXd::Zero(3,6);
@@ -766,8 +766,29 @@ void MsckfVio::optiflowProcess(){
  
   H_x.block<3,3>(0,6) = H_.block<3,3>(0,0);
   H_x.block<3,3>(0,21) = H_.block<3,3>(0,3);
+
+  cout << "---------------------" << endl;
+  // cout << "r: " << r << endl;
+  // cout << "H_: " << H_ << endl;
+  Eigen::MatrixXd cov_measure = Eigen::MatrixXd::Identity(3,3) * 0.1;
+  Eigen::MatrixXd H_H = H_.transpose() * H_;
+
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd_holder(H_H,
+                                                 Eigen::ComputeThinU |
+                                                 Eigen::ComputeThinV);
+  Eigen::MatrixXd D = svd_holder.singularValues();
+  
+  double max_coeff = D.maxCoeff();
+  double min_coeff = D.minCoeff();
+  ROS_INFO("min: %f, max: %f", min_coeff, max_coeff);
+  
+  double noise = max_coeff * 0.04;
+  use_imu_num = noise;
+  r_norm = r.norm();
+  
+  Eigen::MatrixXd noise_weight = Eigen::MatrixXd::Identity(3, 3) * noise;
  
-  OptiflowmeasurementUpdate(H_x, r, noise);
+  OptiflowmeasurementUpdate(H_x, r, noise_weight);
 }
 
 void MsckfVio::estiImuBias(const double time){
@@ -1497,10 +1518,10 @@ void MsckfVio::featureJacobian(
   // }else{
     vision_weight = feature_track_weight;
   // }
-
-  use_imu_num = vision_weight;
+  vision_weight = 1;
+  // use_imu_num = vision_weight;
   per_feature_weight = Eigen::MatrixXd::Identity(H_x.rows(), H_x.rows()) * vision_weight;
-  ROS_INFO("sum id: %d, valid: %d, weight: %f, SIZE: %d", sum_id, valid_cam_state_ids.size(), feature_track_weight, H_x.rows());
+  // ROS_INFO("sum id: %d, valid: %d, weight: %f, SIZE: %d", sum_id, valid_cam_state_ids.size(), feature_track_weight, H_x.rows());
 
 
   return;
@@ -1552,7 +1573,8 @@ void MsckfVio::measurementUpdate(
   // MatrixXd S = H_thin*P*H_thin.transpose() +
   //     weight * Feature::observation_noise*MatrixXd::Identity(
   //     H_thin.rows(), H_thin.rows());
-  ROS_INFO("H_thin: %d, %d, noise_weight: %d, %d", H_thin.rows(), H_thin.cols(), noise_weight.rows(), noise_weight.cols());
+  // ROS_INFO("H_thin: %d, %d, noise_weight: %d, %d", H_thin.rows(), H_thin.cols(), noise_weight.rows(), noise_weight.cols());
+  
   MatrixXd S = H_thin*P*H_thin.transpose() + noise_thin;
 
   //MatrixXd K_transpose = S.fullPivHouseholderQr().solve(H_thin*P);
@@ -2135,13 +2157,14 @@ void MsckfVio::publish(const ros::Time& time) {
   bias_info.bias_gyro_z = imu_state.gyro_bias(2);
 
   bias_info.use_imu_num = use_imu_num;
+
   bias_info.opti_bias_acc_x = opti_bias_acc[0];
   bias_info.opti_bias_acc_y = opti_bias_acc[1];
   bias_info.opti_bias_acc_z = opti_bias_acc[2];
   bias_info.opti_bias_gyro_x = opti_bias_gyro[0];
   bias_info.opti_bias_gyro_y = opti_bias_gyro[1];
   bias_info.opti_bias_gyro_z = opti_bias_gyro[2];
-
+  bias_info.r_norm = r_norm;
   esti_info_pub.publish(bias_info);
 
 
