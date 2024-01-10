@@ -73,6 +73,9 @@ bool MsckfVio::loadParameters() {
   nh.param<string>("gt_type", gt_type, "euroc");
   nh.param<bool>("use_gt_initial", use_gt_initial, true);
   nh.param<double>("dt_imu_opti", dt_imu_opti, 0);
+  nh.param<bool>("only_msckf", only_msckf, false);
+  nh.param<double>("noise/optispeed", noise_optispeed, false);
+  
   
 
   // gravity
@@ -738,7 +741,7 @@ void MsckfVio::featureCallback(
       ros::Time::now()-start_time).toSec();
   // ROS_INFO("finish pruneCamStateBuffer! ");
   
-  if(finish_initialize_optiflow){
+  if(finish_initialize_optiflow && !only_msckf){
     optiflowProcess();
     // ROS_INFO("optiflowProcess! ");
   }
@@ -801,7 +804,7 @@ void MsckfVio::initialize_optiflow(){
   cout << "q_imu_opti: " << q.toRotationMatrix() << endl;
 
   state_server.imu_state.R_vio_opti = q.toRotationMatrix();
-  // state_server.imu_state.R_vio_opti = Eigen::Matrix3d::Identity();
+  state_server.imu_state.R_vio_opti = Eigen::Matrix3d::Identity();
 
 }
 
@@ -937,7 +940,7 @@ void MsckfVio::optiflowProcess(){
   H_x.block<3,3>(0,6) = imu_state.R_vio_opti;// q bg v ba p
   H_x.block<3,3>(0,21) = skewSymmetric(imu_state.R_vio_opti * imu_state.velocity);
   r.segment<3>(0) = imu_state.opti_speed - imu_state.R_vio_opti * imu_state.velocity;
-  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * 0.5;
+  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * noise_optispeed;
 
   // part observalibity
   Eigen::MatrixXd H_x_imu = Eigen::MatrixXd::Zero(3,6);
@@ -1031,9 +1034,11 @@ void MsckfVio::estiImuBias(const double time){
     opti_speed = prev_speed + (curr_speed - prev_speed) / (curr_time - prev_time) * (thres_time - prev_time);
     ROS_INFO("id: %d, prev_time: %f, curr_time: %f, time: %f, thres_time: %f", id, prev_time, curr_time,
           time, thres_time);
+    cout << "opti speed: " << opti_speed.transpose() << " prev_speed: " << prev_speed.transpose() << 
+        " curr_speed: " << curr_speed.transpose() << endl;
   }else
     opti_speed = speed_msg_buffer[id].second;
-
+  
   imu_state.opti_speed = opti_speed;
 
   // cout << "id: " << speed_msg_buffer[id].second.transpose() 
@@ -2030,8 +2035,10 @@ void MsckfVio::publish(const ros::Time& time) {
 
     Eigen::Vector3d r_vel = state_server.imu_state.velocity - state_server.imu_state.opti_speed;
     double r = r_vel.norm();
-    if(r < 0.05)
+    // if(r < 0.05)
       window.push_back(state_server.imu_state);
+    ROS_INFO("WINDOW-------opti speed: %f, %f, %f",state_server.imu_state.opti_speed[0], 
+      state_server.imu_state.opti_speed[1],state_server.imu_state.opti_speed[2]);
   }
 
   // Convert the IMU frame to the body frame.

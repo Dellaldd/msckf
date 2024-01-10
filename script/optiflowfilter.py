@@ -74,9 +74,10 @@ class OptiFlowFilter:
     def optiflowCallback(self, msg):
         # msg = VFR_HUD()
         flow_height = msg.climb/10
+        
         self.current_optiflow.time = msg.header.stamp.to_sec()
-        self.current_optiflow.fx = msg.groundspeed / 0.02 / 10 / flow_height
-        self.current_optiflow.fy = msg.airspeed / 0.02 / 10 / flow_height
+        self.current_optiflow.fx = msg.groundspeed / 0.02 / 10 / flow_height # rad/s
+        self.current_optiflow.fy = msg.airspeed / 0.02 / 10 / flow_height # rad/s
         
         self.current_optiflow.use_height = 0.5 * flow_height + 0.5 * self.current_optiflow.prev_z / 10
         
@@ -133,13 +134,11 @@ class OptiFlowFilter:
         # ((x) < (min)) ? (min) : ( ((x) > (max))? (max) : (x) )
     
     def vec_3d_transition(self, acc):
+        euler = R.from_quat(self.current_imu.orien_ahrs).as_euler('ZYX')
         if(self.is_first_imu):
-            euler = R.from_quat(self.current_imu.orien_ahrs).as_euler('ZYX')
             self.yaw = euler[0]
             self.is_first_imu = False
             
-        euler = R.from_quat(self.current_imu.orien_ahrs).as_euler('ZYX')
-        # print("before: ", euler / np.pi * 180, "yaw: ", self.yaw)
         euler[0] = euler[0] - self.yaw
         # print("after: ", euler / np.pi * 180)
         R_b_w = R.from_euler('ZYX', euler).as_matrix()
@@ -171,8 +170,17 @@ class OptiFlowFilter:
         output = self.lowPassFilter(base_hz, dT, in_put, output)
         return output, a
     
+    def remove_outlier(self):
+        k = 0.8
+        
+        if(abs(self.current_optiflow.fx - self.current_optiflow.prev_fx) > 0.1):
+            self.current_optiflow.fx = self.lowPassFilter(k, self.current_optiflow.prev_fx, self.current_optiflow.fx)
+        
+        if(abs(self.current_optiflow.fy - self.current_optiflow.prev_fy) > 0.1):
+            self.current_optiflow.fy = self.lowPassFilter(k, self.current_optiflow.prev_fy, self.current_optiflow.fy)
+            
     def fusion(self):
-                
+        
         # filter
         dT = self.current_optiflow.time - self.prev_time
         flow_tx = 0.8

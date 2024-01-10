@@ -21,8 +21,7 @@ def quaternion_to_euler(q, degree_mode=1):
 
 
 def main():
-    # foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow_optitrack/data_1_4_1/"
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/data_1_4_1/filter/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/data_1_10_3/initial/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  
@@ -85,7 +84,7 @@ def main():
     error_pos = np.array(error_pos)
     error_pos = np.multiply(error_pos, error_pos)
     error_pos = np.sum(error_pos, axis=1)
-    print(np.sum(np.sqrt(error_pos))/error_pos.shape[0]) 
+    # print(np.sum(np.sqrt(error_pos))/error_pos.shape[0]) 
     
     
     f_new_esti.write("# timestamp tx ty tz qx qy qz qw")

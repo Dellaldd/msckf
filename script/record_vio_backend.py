@@ -4,7 +4,7 @@ from geometry_msgs.msg import *
 from mavros_msgs.msg import *
 from mavros_msgs.srv import *
 from nav_msgs.msg import Odometry
-
+import os
 from scipy.spatial.transform import Rotation as R
 import numpy as np
 import threading
@@ -12,7 +12,10 @@ from msckf_vio.msg import BiasEstiInfo
 
 class Logger:
     def __init__(self):
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/data_1_4_1/filter/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/tight_optiflow/real/data_1_10_3/initial/"
+        if not os.path.exists(self.fold): 
+            os.mkdir(self.fold) 
+            
         self.f_gt = open(self.fold + "stamped_groundtruth.txt", 'w')
         self.f_gt_vel = open(self.fold + "groundtruth_velocity.txt", 'w')
         self.f_esti = open(self.fold + "stamped_traj_estimate.txt", 'w')

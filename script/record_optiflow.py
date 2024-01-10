@@ -8,10 +8,13 @@ from scipy.spatial.transform import Rotation as R
 import numpy as np
 import threading
 import matplotlib.pyplot as plt
-
+import os
 class Logger:
     def __init__(self):
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_4_2/filter/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_9_1/filter/"
+        if not os.path.exists(self.fold): 
+            os.mkdir(self.fold)
+            
         self.f_gt_vel = open(self.fold + "groundtruth_velocity.txt", 'w')
         self.f_filter_vel = open(self.fold + "filter_velocity.txt", 'w')
         self.f_no_filter_vel = open(self.fold + "no_filter_velocity.txt", 'w')
