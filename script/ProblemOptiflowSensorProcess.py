@@ -26,6 +26,8 @@ class OptiFlowData:
         self.time = 0
         self.angular_vel_x = 0
         self.angular_vel_y = 0
+        self.prev_groundspeed = 0
+        self.prev_airspeed = 0
 
         self.prev_height_z = 0
         self.prev_vel_x = 0
@@ -40,7 +42,7 @@ class OptiFlowData:
 class OptiFlowFilter:
     def __init__(self):
         # save path
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_9_1/new/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_16_line_1/"
         if not os.path.exists(self.fold): 
             os.mkdir(self.fold)
             
@@ -79,7 +81,6 @@ class OptiFlowFilter:
         rospy.spin()
     
     def gt_Cb(self, msg):
-        # msg = PoseStamped()
         t = msg.header.stamp.to_sec()
         pos = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
         quat = [msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z,
@@ -93,17 +94,45 @@ class OptiFlowFilter:
                 str(msg.twist.linear.z)])
 
     def imuCallback(self, msg):
-        # msg = Imu()
         self.current_imu.time = msg.header.stamp.to_sec()
         self.current_imu.acc = np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
         self.current_imu.gyro = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
         self.current_imu.orien_ahrs = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
         
     def optiflowCallback(self, msg):
-        flow_height = msg.climb # mm
+        flow_height = msg.altitude # mm
         self.current_optiflow.time = msg.header.stamp.to_sec()
-        self.current_optiflow.angular_vel_x = msg.groundspeed / 0.02 / flow_height # rad/s
-        self.current_optiflow.angular_vel_y = msg.airspeed / 0.02 / flow_height # rad/s
+        dt = msg.header.stamp.to_sec() - self.prev_time
+
+        filter_vel = TwistStamped()
+        no_filter_vel = TwistStamped()
+        
+        print(abs(flow_height-self.current_optiflow.prev_height_z))
+        
+        if(flow_height == self.current_optiflow.prev_height_z):
+            filter_vel.twist.linear.z = self.current_optiflow.prev_vel_z 
+        else:
+            vz = (flow_height - self.current_optiflow.prev_height_z) / 1000 / dt / 2 / 0.5
+            if(abs(vz - filter_vel.twist.linear.z) > 0.5):
+                filter_vel.twist.linear.z = self.current_optiflow.prev_vel_z
+            else:
+                filter_vel.twist.linear.z = self.lowPassFilter(0.5, self.current_optiflow.prev_vel_z, vz)
+            self.current_optiflow.prev_height_z = flow_height
+            
+        if(abs(msg.groundspeed - self.current_optiflow.prev_groundspeed) > 20 and abs(msg.groundspeed/1000/0.02) < 0.05):
+            groundspeed = self.current_optiflow.prev_groundspeed
+        else:
+            groundspeed = msg.groundspeed
+        self.current_optiflow.prev_groundspeed = groundspeed
+        
+        if(abs(msg.airspeed - self.current_optiflow.prev_airspeed) > 20 and abs(msg.airspeed/1000/0.02) < 0.05):
+            airspeed = self.current_optiflow.prev_airspeed
+        else:
+            airspeed = msg.airspeed
+        self.current_optiflow.prev_airspeed = airspeed
+            
+        self.current_optiflow.angular_vel_x = groundspeed / 0.02 / flow_height # rad/s
+        self.current_optiflow.angular_vel_y = airspeed / 0.02 / flow_height # rad/s
         
         # self.current_optiflow.use_height = self.lowPassFilter(0.5, self.current_optiflow.prev_height_z, flow_height)
         self.current_optiflow.use_height = flow_height
@@ -113,19 +142,12 @@ class OptiFlowFilter:
             self.fusion()
         
         # publish filter vel
-        dt = msg.header.stamp.to_sec() - self.prev_time
-        filter_vel = TwistStamped()
         filter_vel.header = msg.header
         
         filter_vel.twist.linear.x = self.current_optiflow.vel_x_out / 1000
         filter_vel.twist.linear.y = self.current_optiflow.vel_y_out / 1000
         
         
-        if(msg.climb == self.current_optiflow.prev_height_z):
-            filter_vel.twist.linear.z = self.current_optiflow.prev_vel_z
-        else:
-            vz = (msg.climb - self.current_optiflow.prev_height_z) / 1000 / dt / 2 / 0.5
-            filter_vel.twist.linear.z = self.lowPassFilter(0.5, self.current_optiflow.prev_vel_z, vz)
         
         self.filter_vel_pub.publish(filter_vel)
         
@@ -133,11 +155,11 @@ class OptiFlowFilter:
                 str(filter_vel.twist.linear.z)])
           
         # publish no filter vel
-        no_filter_vel = TwistStamped()
+        
         no_filter_vel.header = msg.header
         
-        no_filter_vel.twist.linear.x = msg.groundspeed/1000/0.02
-        no_filter_vel.twist.linear.y = msg.airspeed/1000/0.02
+        no_filter_vel.twist.linear.x = groundspeed/1000/0.02
+        no_filter_vel.twist.linear.y = airspeed/1000/0.02
         
         no_filter_vel.twist.linear.z = filter_vel.twist.linear.z
         self.vel_pub.publish(no_filter_vel)
@@ -148,7 +170,7 @@ class OptiFlowFilter:
         
         # save prev data
         self.prev_time = msg.header.stamp.to_sec()
-        self.current_optiflow.prev_height_z = msg.climb
+        
         self.current_optiflow.prev_vel_x =  filter_vel.twist.linear.x
         self.current_optiflow.prev_vel_y =  filter_vel.twist.linear.y
         self.current_optiflow.prev_vel_z = filter_vel.twist.linear.z  
@@ -209,7 +231,7 @@ class OptiFlowFilter:
         vx = self.current_optiflow.angular_vel_x * self.current_optiflow.use_height / 1000 # m/s
         vy = self.current_optiflow.angular_vel_y * self.current_optiflow.use_height / 1000
         
-        print(abs( vx - self.current_optiflow.prev_vel_x))
+        # print(abs( vx - self.current_optiflow.prev_vel_x))
         if(abs( vx - self.current_optiflow.prev_vel_x) > 0.3):
             self.current_optiflow.angular_vel_x = self.lowPassFilter(k, self.current_optiflow.prev_vel_x, vx) / self.current_optiflow.use_height * 1000
         
@@ -247,7 +269,7 @@ class OptiFlowFilter:
         vel_x, self.current_optiflow.prev_diff_x = self.filter_1(k_g_x, fx_gyro_fix, vel_x, self.current_optiflow.prev_diff_x)
         vel_y, self.current_optiflow.prev_diff_y = self.filter_1(k_g_y, fy_gyro_fix, vel_y, self.current_optiflow.prev_diff_y)
                 
-        print(vel_x, self.current_optiflow.prev_diff_x)
+       
         self.current_optiflow.vel_x_out = vel_x
         self.current_optiflow.vel_y_out = vel_y
             
