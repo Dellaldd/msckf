@@ -6,7 +6,7 @@ from tf.transformations import euler_from_quaternion
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_16_line_2/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_18_line_1_5_1/"
     gt_path = foldpath + "groundtruth_velocity.txt"
     opti_path = foldpath + "filter_velocity.txt"
     no_filter_path = foldpath + "no_filter_velocity.txt"
@@ -20,7 +20,7 @@ def main():
     opti_vel = np.array(opti_vel)
     
     start_id = 0
-    while(np.abs(gt_vel[start_id,1]) > 1):
+    while(np.abs(gt_vel[start_id,1]) > 1 or np.abs(gt_vel[start_id,2]) > 1 or np.abs(gt_vel[start_id,3]) > 1):
         start_id += 1
         
     print(gt_vel.shape[0], opti_vel.shape[0])
@@ -54,7 +54,6 @@ def main():
                 break
                 
             gt_num += 1
-        # print(gt_num)
         
         if(is_finish):
             break

@@ -38,8 +38,9 @@ class OptiFlowData:
                 
 class OptiFlowFilter:
     def __init__(self):
+
         # save path
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_16_line_2/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_18_line_1_5_1/"
         if not os.path.exists(self.fold): 
             os.mkdir(self.fold)
             
@@ -92,6 +93,7 @@ class OptiFlowFilter:
                 str(msg.twist.linear.z)])
 
     def imuCallback(self, msg):
+        
         # msg = Imu()
         self.current_imu.time = msg.header.stamp.to_sec()
         self.current_imu.acc = np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
@@ -111,27 +113,34 @@ class OptiFlowFilter:
             filter_vel.twist.linear.z = self.current_optiflow.prev_vel_z 
         else:
             vz = (flow_height - self.current_optiflow.prev_height_z) / 1000 / dt / 2 / 0.5
-            if(abs(vz - filter_vel.twist.linear.z) > 0.2):
-                filter_vel.twist.linear.z = self.current_optiflow.prev_vel_z
+            if(abs(vz - filter_vel.twist.linear.z) > 0.4):
+                filter_vel.twist.linear.z = self.lowPassFilter(0.8, self.current_optiflow.prev_vel_z, vz)
             else:
                 filter_vel.twist.linear.z = self.lowPassFilter(0.5, self.current_optiflow.prev_vel_z, vz)
+            # filter_vel.twist.linear.z = self.lowPassFilter(0.5, self.current_optiflow.prev_vel_z, vz)
             self.current_optiflow.prev_height_z = flow_height
         
         # remove x outlier
-        if((abs(msg.groundspeed - self.current_optiflow.prev_groundspeed) > 15 and abs(msg.groundspeed/1000/0.02) < 0.05)
-                    or abs(msg.groundspeed/1000/0.02 - self.current_optiflow.prev_groundspeed/1000/0.02) > 1.5):
-            groundspeed = self.current_optiflow.prev_groundspeed
-        else:
-            groundspeed = msg.groundspeed
-        self.current_optiflow.prev_groundspeed = groundspeed
+        # if((abs(msg.groundspeed - self.current_optiflow.prev_groundspeed) > 15 and abs(msg.groundspeed/1000/0.02) < 0.05)
+        #             or abs(msg.groundspeed/1000/0.02 - self.current_optiflow.prev_groundspeed/1000/0.02) > 1.5):
+            
+        # if(abs(msg.groundspeed/1000/0.02 - self.current_optiflow.prev_groundspeed/1000/0.02) > 1):
+        #     groundspeed = self.current_optiflow.prev_groundspeed
+        # else:
+        #     groundspeed = msg.groundspeed
+        # self.current_optiflow.prev_groundspeed = groundspeed
+        groundspeed = msg.groundspeed
         
         # remove y outlier
-        if((abs(msg.airspeed - self.current_optiflow.prev_airspeed) > 15 and abs(msg.airspeed/1000/0.02) < 0.05)
-                    or abs(msg.airspeed/1000/0.02 - self.current_optiflow.prev_airspeed/1000/0.02) > 1.5):      
-            airspeed = self.current_optiflow.prev_airspeed
-        else:
-            airspeed = msg.airspeed
-        self.current_optiflow.prev_airspeed = airspeed
+        # if((abs(msg.airspeed - self.current_optiflow.prev_airspeed) > 15 and abs(msg.airspeed/1000/0.02) < 0.05)
+        #             or abs(msg.airspeed/1000/0.02 - self.current_optiflow.prev_airspeed/1000/0.02) > 1.5):  
+        
+        # if(abs(msg.airspeed/1000/0.02 - self.current_optiflow.prev_airspeed/1000/0.02) > 1):
+        #     airspeed = self.current_optiflow.prev_airspeed
+        # else:
+        #     airspeed = msg.airspeed
+        # self.current_optiflow.prev_airspeed = airspeed
+        airspeed = msg.airspeed
         
         self.current_optiflow.angular_vel_x = groundspeed / 0.02 / flow_height # rad/s
         self.current_optiflow.angular_vel_y = airspeed / 0.02 / flow_height # rad/s
@@ -271,8 +280,8 @@ class OptiFlowFilter:
         vel_x = self.filter(5, dT, fx_gyro_fix, vel_x)
         vel_y = self.filter(5, dT, fy_gyro_fix, vel_y)
         
-        self.current_optiflow.vel_x_out = self.lowPassFilter(0.7, vel_x, self.current_optiflow.vel_x_out)
-        self.current_optiflow.vel_y_out = self.lowPassFilter(0.7, vel_y, self.current_optiflow.vel_y_out)
+        self.current_optiflow.vel_x_out = self.lowPassFilter(1, vel_x, self.current_optiflow.vel_x_out)
+        self.current_optiflow.vel_y_out = self.lowPassFilter(1, vel_y, self.current_optiflow.vel_y_out)
         
         # self.current_optiflow.vel_x_out = vel_x
         # self.current_optiflow.vel_y_out = vel_y

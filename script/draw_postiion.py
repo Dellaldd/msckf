@@ -21,7 +21,8 @@ def quaternion_to_euler(q, degree_mode=1):
 
 
 def main():
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_1_16_line_1/"
+    # foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_1_18_line_1_5_1/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/optiflow/real/data_1_18_line_1_5_1/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  
@@ -50,6 +51,10 @@ def main():
     
     end = min(esti.shape[0], gt.shape[0])
     start = 0
+    
+    start_time = esti[0,0]
+    esti[:,0] = esti[:,0] - start_time
+    gt[:, 0] = gt[:, 0] - start_time
     
     for i in range(end):
         q = [esti[i,4], esti[i,5], esti[i,6], esti[i,7]]

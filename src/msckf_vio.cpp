@@ -507,7 +507,8 @@ bool MsckfVio::staticinitialize(const sensor_msgs::ImuConstPtr& msg){
     
   Eigen::Quaterniond q0_i_w(q_GtoI);
   q0_i_w.normalize();
-
+  if(q0_i_w.x() < 0)
+    q0_i_w.x() = -q0_i_w.x();
   state_server.imu_state.time = msg->header.stamp.toSec();
   state_server.imu_state.position = Eigen::Vector3d::Zero(); // p_imu_w
   state_server.imu_state.velocity = Eigen::Vector3d::Zero();
@@ -696,7 +697,7 @@ void MsckfVio::featureCallback(
   static int critical_time_cntr = 0;
   double processing_start_time = ros::Time::now().toSec();
 
-  if(!finish_initialize_optiflow && window.size() == 40){
+  if(!finish_initialize_optiflow && window.size() > 1){
     initialize_optiflow();
     finish_initialize_optiflow = true;
   }
@@ -780,30 +781,30 @@ void MsckfVio::featureCallback(
 }
 
 void MsckfVio::initialize_optiflow(){
-  ROS_ERROR(" START INITIALIZE !");
-  ceres::Problem problem;
-  double q_imu_opti[4] = {0, 0, 0, 1};
+  // ROS_ERROR(" START INITIALIZE !");
+  // ceres::Problem problem;
+  // double q_imu_opti[4] = {0, 0, 0, 1};
 
-  ceres::LossFunction *loss_function;
-  loss_function = new ceres::HuberLoss(1.0);
-  ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<InitializeOpti, 120, 4>(
-        new InitializeOpti(window));     
-  problem.AddResidualBlock(cost_function, loss_function, q_imu_opti);
+  // ceres::LossFunction *loss_function;
+  // loss_function = new ceres::HuberLoss(1.0);
+  // ceres::CostFunction *cost_function = new ceres::AutoDiffCostFunction<InitializeOpti, 120, 4>(
+  //       new InitializeOpti(window));     
+  // problem.AddResidualBlock(cost_function, loss_function, q_imu_opti);
 
-  ceres::Solver::Options options;
-  options.minimizer_progress_to_stdout = true;
+  // ceres::Solver::Options options;
+  // options.minimizer_progress_to_stdout = true;
 
-  options.linear_solver_type = ceres::DENSE_SCHUR;
-  // options.trust_region_strategy_type = ceres::DOGLEG;
-  ceres::Solver::Summary summary;
-  ceres::Solve(options, &problem, &summary);
-  Eigen::Quaterniond q(Eigen::Vector4d(q_imu_opti[0], q_imu_opti[1], q_imu_opti[2], q_imu_opti[3]));
-  q.normalize();
-  ROS_ERROR("q: %f, %f, %f ,%f", q.x(), q.y(), q.z(), q.w());
+  // options.linear_solver_type = ceres::DENSE_SCHUR;
+  // // options.trust_region_strategy_type = ceres::DOGLEG;
+  // ceres::Solver::Summary summary;
+  // ceres::Solve(options, &problem, &summary);
+  // Eigen::Quaterniond q(Eigen::Vector4d(q_imu_opti[0], q_imu_opti[1], q_imu_opti[2], q_imu_opti[3]));
+  // q.normalize();
+  // ROS_ERROR("q: %f, %f, %f ,%f", q.x(), q.y(), q.z(), q.w());
   
-  cout << "q_imu_opti: " << q.toRotationMatrix() << endl;
+  // cout << "q_imu_opti: " << q.toRotationMatrix() << endl;
 
-  state_server.imu_state.R_vio_opti = q.toRotationMatrix();
+  // state_server.imu_state.R_vio_opti = q.toRotationMatrix();
   state_server.imu_state.R_vio_opti = Eigen::Matrix3d::Identity();
 
 }
@@ -956,10 +957,9 @@ void MsckfVio::optiflowProcess(){
   H_x.block<3,3>(0,21) = H_.block<3,3>(0,3);
   
   cout << "R_vio_opti: " << imu_state.R_vio_opti << endl;
-  use_imu_num = r.norm();
-  ROS_INFO("R_ERROR: %f, %f, %f", r(0), r(1), r(2));
+  // ROS_INFO("R_ERROR: %f, %f, %f", r(0), r(1), r(2));
 
-  if(r.norm() < 0.15)
+  // if(r.norm() < 0.15)
     OptiflowmeasurementUpdate(H_x, r, noise);
   
 }
@@ -1007,8 +1007,8 @@ void MsckfVio::estiImuBias(const double time){
   bool msg_is_big = false;
   for(; id < speed_msg_buffer.size(); id++){
     double msg_time = speed_msg_buffer[id].first;
-    ROS_INFO("id: %d, use_time: %f, time_bound: %f, time_thres: %f", id, 
-      msg_time, time_bound, thres_time);
+    // ROS_INFO("id: %d, use_time: %f, time_bound: %f, time_thres: %f", id, 
+      // msg_time, time_bound, thres_time);
     if (msg_time < time_bound) {
       ++used_msg;
       continue;
@@ -1032,10 +1032,10 @@ void MsckfVio::estiImuBias(const double time){
     Eigen::Vector3d curr_speed = speed_msg_buffer[id].second;
     double curr_time = speed_msg_buffer[id].first;
     opti_speed = prev_speed + (curr_speed - prev_speed) / (curr_time - prev_time) * (thres_time - prev_time);
-    ROS_INFO("id: %d, prev_time: %f, curr_time: %f, time: %f, thres_time: %f", id, prev_time, curr_time,
-          time, thres_time);
-    cout << "opti speed: " << opti_speed.transpose() << " prev_speed: " << prev_speed.transpose() << 
-        " curr_speed: " << curr_speed.transpose() << endl;
+    // ROS_INFO("id: %d, prev_time: %f, curr_time: %f, time: %f, thres_time: %f", id, prev_time, curr_time,
+    //       time, thres_time);
+    // cout << "opti speed: " << opti_speed.transpose() << " prev_speed: " << prev_speed.transpose() << 
+    //     " curr_speed: " << curr_speed.transpose() << endl;
   }else
     opti_speed = speed_msg_buffer[id].second;
   
@@ -1135,7 +1135,6 @@ void MsckfVio::mocapOdomCallback(
 void MsckfVio::batchImuProcessing(const double& time_bound) {
   // Counter how many IMU msgs in the buffer are used.
   int used_imu_msg_cntr = 0;
-  // use_imu_num = 0;
   // cout << "gravity: " << IMUState::gravity << endl;
   for (const auto& imu_msg : imu_msg_buffer) {
     double imu_time = imu_msg.header.stamp.toSec();
@@ -1153,7 +1152,6 @@ void MsckfVio::batchImuProcessing(const double& time_bound) {
     // Execute process model.
     processModel(imu_time, m_gyro, m_acc);
     ++used_imu_msg_cntr;
-    // use_imu_num ++;
   }
 
   // Set the state ID for the new IMU state.
@@ -1765,9 +1763,11 @@ void MsckfVio::removeLostFeatures() {
 
   H_x.conservativeResize(stack_cntr, H_x.cols());
   r.conservativeResize(stack_cntr);
-
+  
   // Perform the measurement update step.
-  measurementUpdate(H_x, r);
+  if(r.norm() < 0.15)
+    measurementUpdate(H_x, r);
+
 
   // Remove all processed features from the map.
   for (const auto& feature_id : processed_feature_ids)
@@ -1914,9 +1914,10 @@ void MsckfVio::pruneCamStateBuffer() {
 
   H_x.conservativeResize(stack_cntr, H_x.cols());
   r.conservativeResize(stack_cntr);
-
+  use_imu_num = r.norm();
   // Perform measurement update.
-  measurementUpdate(H_x, r);
+  if(r.norm() < 0.15)
+    measurementUpdate(H_x, r);
 
   for (const auto& cam_id : rm_cam_state_ids) {
     int cam_sequence = std::distance(state_server.cam_states.begin(),
@@ -2028,7 +2029,7 @@ void MsckfVio::publish(const ros::Time& time) {
   
   // add imu state to window;
   if(has_remove_state){
-    if(window.size() >= 40){
+    if(window.size() >= 10){
       auto first_frame = window.begin();
       window.erase(first_frame);
     }
@@ -2037,8 +2038,8 @@ void MsckfVio::publish(const ros::Time& time) {
     double r = r_vel.norm();
     // if(r < 0.05)
       window.push_back(state_server.imu_state);
-    ROS_INFO("WINDOW-------opti speed: %f, %f, %f",state_server.imu_state.opti_speed[0], 
-      state_server.imu_state.opti_speed[1],state_server.imu_state.opti_speed[2]);
+    // ROS_INFO("WINDOW-------opti speed: %f, %f, %f",state_server.imu_state.opti_speed[0], 
+    //   state_server.imu_state.opti_speed[1],state_server.imu_state.opti_speed[2]);
   }
 
   // Convert the IMU frame to the body frame.

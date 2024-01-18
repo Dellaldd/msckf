@@ -227,7 +227,7 @@ class MsckfVio {
     double tracking_rate_threshold;
 
     double init_window_time = 2.0;
-    double init_imu_thresh = 0.2;
+    double init_imu_thresh = 0.6;
 
     // Ros node handle
     ros::NodeHandle nh;
@@ -267,7 +267,7 @@ class MsckfVio {
 
     double prev_speed_z;
     bool is_first_opti = true, use_gt_initial, finish_initialize_optiflow = false, only_msckf = true;
-    bool has_remove_state = false;
+    bool has_remove_state = true;
     std::string gt_path, gt_type;
     double prev_time, prev_pz;
     std::vector<Gt> gt_poses;
