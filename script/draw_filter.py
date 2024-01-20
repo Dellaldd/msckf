@@ -6,7 +6,7 @@ from tf.transformations import euler_from_quaternion
 
 def main():
     
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_18_line_1_5_1/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_19/data_1_19_line_1_5_test/"
     gt_path = foldpath + "groundtruth_velocity.txt"
     opti_path = foldpath + "filter_velocity.txt"
     no_filter_path = foldpath + "no_filter_velocity.txt"

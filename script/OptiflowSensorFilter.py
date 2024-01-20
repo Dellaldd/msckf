@@ -40,7 +40,7 @@ class OptiFlowFilter:
     def __init__(self):
 
         # save path
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_18_line_1_5_1/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/dataset/real/data_1_19/data_1_19_line_1_5_test/"
         if not os.path.exists(self.fold): 
             os.mkdir(self.fold)
             
@@ -113,8 +113,8 @@ class OptiFlowFilter:
             filter_vel.twist.linear.z = self.current_optiflow.prev_vel_z 
         else:
             vz = (flow_height - self.current_optiflow.prev_height_z) / 1000 / dt / 2 / 0.5
-            if(abs(vz - filter_vel.twist.linear.z) > 0.4):
-                filter_vel.twist.linear.z = self.lowPassFilter(0.8, self.current_optiflow.prev_vel_z, vz)
+            if(abs(vz - filter_vel.twist.linear.z) > 0.2):
+                filter_vel.twist.linear.z = self.lowPassFilter(0.9, self.current_optiflow.prev_vel_z, vz)
             else:
                 filter_vel.twist.linear.z = self.lowPassFilter(0.5, self.current_optiflow.prev_vel_z, vz)
             # filter_vel.twist.linear.z = self.lowPassFilter(0.5, self.current_optiflow.prev_vel_z, vz)
@@ -251,13 +251,16 @@ class OptiFlowFilter:
         dT = self.current_optiflow.time - self.prev_time
         flow_tx = 0.4
         flow_ty = 0.4
-                
+        
+        # flow_tx = self.current_imu.gyro_lpf_y/3
+        # flow_ty = self.current_imu.gyro_lpf_x/3
+        
         self.current_imu.gyro_lpf_x = self.current_imu.gyro[0] # current gyro
         self.current_imu.gyro_lpf_y = self.current_imu.gyro[1]
                                         
         # # 光流补偿，补偿后单位为mm/s        
-        fx_gyro_fix = ((self.current_optiflow.angular_vel_x  - self.limit(((self.current_imu.gyro_lpf_y)),-flow_tx,flow_tx)) * self.current_optiflow.use_height ) ;  #rotation compensation
-        fy_gyro_fix = ((self.current_optiflow.angular_vel_y  - self.limit(((self.current_imu.gyro_lpf_x)),-flow_ty,flow_ty)) * self.current_optiflow.use_height ) ;  #rotation compensation
+        fx_gyro_fix = (self.current_optiflow.angular_vel_x  - self.limit(self.current_imu.gyro_lpf_y,-flow_tx,flow_tx)) * self.current_optiflow.use_height  #rotation compensation
+        fy_gyro_fix = (self.current_optiflow.angular_vel_y  - self.limit(self.current_imu.gyro_lpf_x,-flow_ty,flow_ty)) * self.current_optiflow.use_height  #rotation compensation
         
                        
         # 消除pitch 和 roll的影响 计算在水平平面中加速度的大小

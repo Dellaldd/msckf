@@ -68,7 +68,7 @@ bool MsckfVio::loadParameters() {
   // gt
   ifstream ifs_gt;
   
-
+  nh.param<double>("init_imu_thresh", init_imu_thresh, 0.4);
   nh.param<string>("gt_path", gt_path, "/home/ldd/euroc/V1_01_easy/mav0/state_groundtruth_estimate0/V1_01_easy.txt");
   nh.param<string>("gt_type", gt_type, "euroc");
   nh.param<bool>("use_gt_initial", use_gt_initial, true);
@@ -744,7 +744,6 @@ void MsckfVio::featureCallback(
   
   if(finish_initialize_optiflow && !only_msckf){
     optiflowProcess();
-    // ROS_INFO("optiflowProcess! ");
   }
 
   // Publish the odometry.
@@ -932,6 +931,7 @@ void MsckfVio::OptiflowmeasurementUpdate(const Eigen::MatrixXd& H,const Eigen::V
 }
 
 void MsckfVio::optiflowProcess(){  
+  optiflow_num = 0;
 
   Eigen::MatrixXd H_x = MatrixXd::Zero(3,24+6*state_server.cam_states.size());
   Eigen::VectorXd r = VectorXd::Zero(3);
@@ -958,8 +958,8 @@ void MsckfVio::optiflowProcess(){
   
   cout << "R_vio_opti: " << imu_state.R_vio_opti << endl;
   // ROS_INFO("R_ERROR: %f, %f, %f", r(0), r(1), r(2));
-
-  // if(r.norm() < 0.15)
+  optiflow_num = r.norm();
+  if(r.norm() < 2.5)
     OptiflowmeasurementUpdate(H_x, r, noise);
   
 }
@@ -1684,6 +1684,7 @@ bool MsckfVio::gatingTest(
 
 void MsckfVio::removeLostFeatures() {
 
+  remove_lost_num = 0;
   // Remove the features that lost track.
   // BTW, find the size the final Jacobian matrix and residual vector.
   int jacobian_row_size = 0;
@@ -1765,9 +1766,12 @@ void MsckfVio::removeLostFeatures() {
   r.conservativeResize(stack_cntr);
   
   // Perform the measurement update step.
-  if(r.norm() < 0.15)
+  remove_lost_num = r.norm();
+  if(r.norm() < 0.2){
     measurementUpdate(H_x, r);
-
+    use_imu_num = r.norm();
+  }
+  
 
   // Remove all processed features from the map.
   for (const auto& feature_id : processed_feature_ids)
@@ -1828,7 +1832,7 @@ void MsckfVio::findRedundantCamStates(
 }
 
 void MsckfVio::pruneCamStateBuffer() {
-
+  remove_state_num = 0;
   if (state_server.cam_states.size() < max_cam_state_size)
     return;
 
@@ -1914,10 +1918,13 @@ void MsckfVio::pruneCamStateBuffer() {
 
   H_x.conservativeResize(stack_cntr, H_x.cols());
   r.conservativeResize(stack_cntr);
-  use_imu_num = r.norm();
+
   // Perform measurement update.
-  if(r.norm() < 0.15)
-    measurementUpdate(H_x, r);
+  remove_state_num = r.norm();
+  
+  measurementUpdate(H_x, r);
+  use_imu_num = r.norm();
+  
 
   for (const auto& cam_id : rm_cam_state_ids) {
     int cam_sequence = std::distance(state_server.cam_states.begin(),
@@ -2181,7 +2188,10 @@ void MsckfVio::publish(const ros::Time& time) {
   bias_info.bias_gyro_y = imu_state.gyro_bias(1);
   bias_info.bias_gyro_z = imu_state.gyro_bias(2);
 
-  bias_info.use_imu_num = use_imu_num;
+  bias_info.remove_state_num = remove_state_num;
+  bias_info.remove_lost_num = remove_lost_num;
+  bias_info.optiflow_num = optiflow_num;
+
   bias_info.opti_bias_acc_x = opti_bias_acc[0];
   bias_info.opti_bias_acc_y = opti_bias_acc[1];
   bias_info.opti_bias_acc_z = opti_bias_acc[2];

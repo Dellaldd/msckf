@@ -14,4 +14,6 @@ float64 opti_bias_gyro_x
 float64 opti_bias_gyro_y
 float64 opti_bias_gyro_z
 
-float64 use_imu_num
+float64 remove_state_num
+float64 remove_lost_num
+float64 optiflow_num

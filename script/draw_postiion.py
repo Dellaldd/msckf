@@ -21,8 +21,8 @@ def quaternion_to_euler(q, degree_mode=1):
 
 
 def main():
-    # foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_1_18_line_1_5_1/"
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/optiflow/real/data_1_18_line_1_5_1/"
+    # foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_1_18/data_1_18_line_3/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/optiflow/real/data_1_19/data_1_19_line_0_5_test/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  
@@ -52,9 +52,9 @@ def main():
     end = min(esti.shape[0], gt.shape[0])
     start = 0
     
-    start_time = esti[0,0]
-    esti[:,0] = esti[:,0] - start_time
-    gt[:, 0] = gt[:, 0] - start_time
+    # start_time = esti[0,0]
+    # esti[:,0] = esti[:,0] - start_time
+    # gt[:, 0] = gt[:, 0] - start_time
     
     for i in range(end):
         q = [esti[i,4], esti[i,5], esti[i,6], esti[i,7]]
@@ -160,20 +160,7 @@ def main():
     
     ax2[1][0].plot(bias[start:end,0], bias[start:end,4], 'b-')
     ax2[1][1].plot(bias[start:end,0], bias[start:end,5], 'b-')
-    ax2[1][2].plot(bias[start:end,0], bias[start:end,6], 'b-')  
-    
-    # ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.002153, 'r-')
-    # ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.020744, 'r-')
-    # ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.075806, 'r-')  
- 
-    # ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.0546303, 'r-')
-    # ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.0208792, 'r-')
-    # ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.094797, 'r-') 
-    
-    # -0.002341, 0.021815, 0.07660
-    ax2[1][0].plot(bias[start:end,0], np.ones((end - start)) * -0.002341, 'r-', label = 'gt')
-    ax2[1][1].plot(bias[start:end,0], np.ones((end - start)) * 0.021815, 'r-', label = 'gt')
-    ax2[1][2].plot(bias[start:end,0], np.ones((end - start)) * 0.07660, 'r-', label = 'gt')
+    ax2[1][2].plot(bias[start:end,0], bias[start:end,6], 'b-')      
     
     ax2[0][0].plot(bias[start:end,0], bias[start:end,7], 'g-', label = 'opti_bias')
     ax2[0][1].plot(bias[start:end,0], bias[start:end,8], 'g-', label = 'opti_bias')
@@ -183,7 +170,9 @@ def main():
     ax2[1][1].plot(bias[start:end,0], bias[start:end,11], 'g-', label = 'opti_bias')
     ax2[1][2].plot(bias[start:end,0], bias[start:end,12], 'g-', label = 'opti_bias')  
     
-    ax2[2][0].plot(bias[start:end,0], bias[start:end,13], 'g-')
+    ax2[2][0].plot(bias[start:end,0], bias[start:end,13], 'b-')
+    ax2[2][1].plot(bias[start:end,0], bias[start:end,14], 'b-')
+    ax2[2][2].plot(bias[start:end,0], bias[start:end,15], 'b-')
     
     if(use_msckf):
         ax2[0][0].plot(msckf_bias[start:end,0], msckf_bias[start:end,1], 'y-', label = 'msckf')
@@ -202,9 +191,9 @@ def main():
     ax2[1, 1].set_title("gyro_y(rad/s)")
     ax2[1, 2].set_title("gyro_z(rad/s)")
     
-    ax2[2, 0].set_title("imu used to integrate")
-    ax2[2, 1].set_title("imu buffer size")
-    ax2[2, 2].set_title("features used to optimize")
+    ax2[2, 0].set_title("remove_state_num")
+    ax2[2, 1].set_title("remove_lost_num")
+    ax2[2, 2].set_title("optiflow_num")
     
     ax2[3, 0].set_title("bias_a(m^s-2)")
     ax2[3, 1].set_title("bias_w(rad/s)")
