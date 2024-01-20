@@ -7,12 +7,9 @@ float64 bias_gyro_x
 float64 bias_gyro_y
 float64 bias_gyro_z
 
-float64 opti_bias_acc_x
-float64 opti_bias_acc_y
-float64 opti_bias_acc_z
-float64 opti_bias_gyro_x
-float64 opti_bias_gyro_y
-float64 opti_bias_gyro_z
+float64 diff_v_x
+float64 diff_v_y
+float64 diff_v_z
 
 float64 remove_state_num
 float64 remove_lost_num

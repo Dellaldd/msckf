@@ -941,7 +941,6 @@ void MsckfVio::optiflowProcess(){
   H_x.block<3,3>(0,6) = imu_state.R_vio_opti;// q bg v ba p
   H_x.block<3,3>(0,21) = skewSymmetric(imu_state.R_vio_opti * imu_state.velocity);
   r.segment<3>(0) = imu_state.opti_speed - imu_state.R_vio_opti * imu_state.velocity;
-  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * noise_optispeed;
 
   // part observalibity
   Eigen::MatrixXd H_x_imu = Eigen::MatrixXd::Zero(3,6);
@@ -957,10 +956,24 @@ void MsckfVio::optiflowProcess(){
   H_x.block<3,3>(0,21) = H_.block<3,3>(0,3);
   
   cout << "R_vio_opti: " << imu_state.R_vio_opti << endl;
-  // ROS_INFO("R_ERROR: %f, %f, %f", r(0), r(1), r(2));
-  optiflow_num = r.norm();
-  if(r.norm() < 2.5)
-    OptiflowmeasurementUpdate(H_x, r, noise);
+ 
+  diff_velocity = r;
+
+  Eigen::MatrixXd cov_measure = Eigen::MatrixXd::Identity(3,3) * noise_optispeed;
+  
+  Eigen::MatrixXd H_H = H_.transpose() * cov_measure * H_;
+
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd_holder(H_H,
+                                                 Eigen::ComputeThinU |
+                                                 Eigen::ComputeThinV);
+  Eigen::MatrixXd D = svd_holder.singularValues();
+  
+  double weight = D.maxCoeff() * 0.1;
+  ROS_INFO("weight: %f", weight);
+  Eigen::MatrixXd noise = Eigen::MatrixXd::Identity(3, 3) * weight;
+  noise(2,2) = noise(2,2) / 100;
+  OptiflowmeasurementUpdate(H_x, r, noise);
+  optiflow_num = weight;
   
 }
 
@@ -2188,16 +2201,14 @@ void MsckfVio::publish(const ros::Time& time) {
   bias_info.bias_gyro_y = imu_state.gyro_bias(1);
   bias_info.bias_gyro_z = imu_state.gyro_bias(2);
 
+  bias_info.diff_v_x = diff_velocity(0);
+  bias_info.diff_v_y = diff_velocity(1);
+  bias_info.diff_v_z = diff_velocity(2);
+
   bias_info.remove_state_num = remove_state_num;
   bias_info.remove_lost_num = remove_lost_num;
   bias_info.optiflow_num = optiflow_num;
 
-  bias_info.opti_bias_acc_x = opti_bias_acc[0];
-  bias_info.opti_bias_acc_y = opti_bias_acc[1];
-  bias_info.opti_bias_acc_z = opti_bias_acc[2];
-  bias_info.opti_bias_gyro_x = opti_bias_gyro[0];
-  bias_info.opti_bias_gyro_y = opti_bias_gyro[1];
-  bias_info.opti_bias_gyro_z = opti_bias_gyro[2];
 
   esti_info_pub.publish(bias_info);
 

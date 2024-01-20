@@ -13,7 +13,7 @@ from msckf_vio.msg import BiasEstiInfo
 class Logger:
     def __init__(self):
         # self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_1_18/data_1_18_line_3/"
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/optiflow/real/data_1_19/data_1_19_line_0_5_test/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/weight/real/data_1_19/data_1_19_line_0_5/"
         if not os.path.exists(self.fold): 
             os.mkdir(self.fold) 
             
@@ -41,8 +41,8 @@ class Logger:
     
     def bias_Cb(self, msg):
         self.bias_data.append([str(msg.header.stamp.to_sec()), str(msg.bias_acc_x), str(msg.bias_acc_y), str(msg.bias_acc_z)
-                               , str(msg.bias_gyro_x), str(msg.bias_gyro_y), str(msg.bias_gyro_z), str(msg.opti_bias_acc_x), str(msg.opti_bias_acc_y), str(msg.opti_bias_acc_z)
-                               , str(msg.opti_bias_gyro_x), str(msg.opti_bias_gyro_y), str(msg.opti_bias_gyro_z), str(msg.remove_state_num), str(msg.remove_lost_num), str(msg.optiflow_num)])
+                               , str(msg.bias_gyro_x), str(msg.bias_gyro_y), str(msg.bias_gyro_z), str(msg.diff_v_x), str(msg.diff_v_y), str(msg.diff_v_z)
+                               , str(msg.remove_state_num), str(msg.remove_lost_num), str(msg.optiflow_num)])
     
     def write_data(self):
         for data in self.gt_pose:

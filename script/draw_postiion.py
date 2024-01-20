@@ -22,7 +22,7 @@ def quaternion_to_euler(q, degree_mode=1):
 
 def main():
     # foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_1_18/data_1_18_line_3/"
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/optiflow/real/data_1_19/data_1_19_line_0_5_test/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/weight/real/data_1_19/data_1_19_line_0_5/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  
@@ -162,17 +162,13 @@ def main():
     ax2[1][1].plot(bias[start:end,0], bias[start:end,5], 'b-')
     ax2[1][2].plot(bias[start:end,0], bias[start:end,6], 'b-')      
     
-    ax2[0][0].plot(bias[start:end,0], bias[start:end,7], 'g-', label = 'opti_bias')
-    ax2[0][1].plot(bias[start:end,0], bias[start:end,8], 'g-', label = 'opti_bias')
-    ax2[0][2].plot(bias[start:end,0], bias[start:end,9], 'g-', label = 'opti_bias')
+    ax2[2][0].plot(bias[start:end,0], bias[start:end,7], 'b-')
+    ax2[2][1].plot(bias[start:end,0], bias[start:end,8], 'b-')
+    ax2[2][2].plot(bias[start:end,0], bias[start:end,9], 'b-')
     
-    ax2[1][0].plot(bias[start:end,0], bias[start:end,10], 'g-', label = 'opti_bias')
-    ax2[1][1].plot(bias[start:end,0], bias[start:end,11], 'g-', label = 'opti_bias')
-    ax2[1][2].plot(bias[start:end,0], bias[start:end,12], 'g-', label = 'opti_bias')  
-    
-    ax2[2][0].plot(bias[start:end,0], bias[start:end,13], 'b-')
-    ax2[2][1].plot(bias[start:end,0], bias[start:end,14], 'b-')
-    ax2[2][2].plot(bias[start:end,0], bias[start:end,15], 'b-')
+    ax2[3][0].plot(bias[start:end,0], bias[start:end,10], 'b-')
+    ax2[3][1].plot(bias[start:end,0], bias[start:end,11], 'b-')
+    ax2[3][2].plot(bias[start:end,0], bias[start:end,12], 'b-')
     
     if(use_msckf):
         ax2[0][0].plot(msckf_bias[start:end,0], msckf_bias[start:end,1], 'y-', label = 'msckf')

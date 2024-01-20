@@ -277,6 +277,7 @@ class MsckfVio {
     double remove_state_num = 0;
     double remove_lost_num = 0;
     double optiflow_num = 0;
+    Eigen::Vector3d diff_velocity;
 };
 
 typedef MsckfVio::Ptr MsckfVioPtr;
