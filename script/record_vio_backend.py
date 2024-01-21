@@ -13,7 +13,7 @@ from msckf_vio.msg import BiasEstiInfo
 class Logger:
     def __init__(self):
         # self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_1_18/data_1_18_line_3/"
-        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/weight/real/data_1_19/data_1_19_line_0_5/"
+        self.fold = "/home/ldd/msckf_ws/src/msckf_vio/result/weight/real/data_1_19/data_1_19_line_0_5_feature/"
         if not os.path.exists(self.fold): 
             os.mkdir(self.fold) 
             

@@ -171,9 +171,9 @@ class MsckfVio {
     // in the given camera states of this feature.
     void featureJacobian(const FeatureIDType& feature_id,
         const std::vector<StateIDType>& cam_state_ids,
-        Eigen::MatrixXd& H_x, Eigen::VectorXd& r);
+        Eigen::MatrixXd& H_x, Eigen::VectorXd& r, Eigen::MatrixXd& per_feature_weight);
     void measurementUpdate(const Eigen::MatrixXd& H,
-        const Eigen::VectorXd& r);
+        const Eigen::VectorXd& r, Eigen::MatrixXd noise_weight);
     bool gatingTest(const Eigen::MatrixXd& H,
         const Eigen::VectorXd&r, const int& dof);
     void removeLostFeatures();
@@ -278,6 +278,9 @@ class MsckfVio {
     double remove_lost_num = 0;
     double optiflow_num = 0;
     Eigen::Vector3d diff_velocity;
+    double z_weight = 0;
+    double vision_weight = 0;
+    double optiflow_weight = 0;
 };
 
 typedef MsckfVio::Ptr MsckfVioPtr;

@@ -70,10 +70,13 @@
       <param name="dt_imu_opti" value="0.03"/>
       <param name="noise/optispeed" value="0.5"/>
       
-      <!-- <param name="only_msckf" value="true"/> -->
       <param name="only_msckf" value="false"/>
 
+      <param name="optiflow_weight" value="0.1"/>
       <param name="use_gt_initial" value="false"/>
+      <param name="vision_weight" value="1"/>
+      
+      <param name="z_weight" value="100"/>
 
       <!-- <param name="gt_path" value="/home/ldd/msckf_ws/src/msckf_vio/dataset/v101/gt.txt"/>
       <param name="gt_type" value="euroc"/> -->

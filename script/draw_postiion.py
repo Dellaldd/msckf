@@ -22,7 +22,7 @@ def quaternion_to_euler(q, degree_mode=1):
 
 def main():
     # foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/real/data_1_18/data_1_18_line_3/"
-    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/weight/real/data_1_19/data_1_19_line_0_5/"
+    foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/weight/real/data_1_19/data_1_19_line_0_5_feature/"
     msckf_foldpath = "/home/ldd/msckf_ws/src/msckf_vio/result/msckf/v203/"
     
     gt_path = foldpath + "groundtruth_velocity.txt"  
